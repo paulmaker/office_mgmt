@@ -1,0 +1,269 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Authentication & Users
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  role          UserRole  @default(ACCOUNTANT)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// Business Models
+model Client {
+  id              String   @id @default(cuid())
+  name            String
+  companyName     String?
+  email           String
+  phone           String?
+  address         String?
+  billingAddress  String?
+  vatNumber       String?
+  vatRegistered   Boolean  @default(false)
+  cisRegistered   Boolean  @default(false)
+  paymentTerms    Int      @default(30) // days
+  ratesConfig     Json?    // Store hourly rates, job pricing
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  salesInvoices   Invoice[] @relation("ClientSalesInvoices")
+}
+
+model Subcontractor {
+  id                     String   @id @default(cuid())
+  name                   String
+  email                  String   @unique
+  phone                  String?
+  address                String?
+  niNumber               String?
+  utr                    String?
+  cisVerificationNumber  String?
+  cisStatus              CISStatus @default(NOT_VERIFIED)
+  paymentType            PaymentType @default(CIS)
+  bankDetails            Json?    // Encrypted in production
+  notes                  String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  timesheets             Timesheet[]
+  purchaseInvoices       Invoice[] @relation("SubcontractorPurchaseInvoices")
+}
+
+model Invoice {
+  id                String        @id @default(cuid())
+  invoiceNumber     String        @unique
+  type              InvoiceType
+  clientId          String?
+  subcontractorId   String?
+  date              DateTime      @default(now())
+  dueDate           DateTime
+  subtotal          Float
+  vatAmount         Float         @default(0)
+  vatRate           Float         @default(20)
+  cisDeduction      Float         @default(0)
+  cisRate           Float         @default(0)
+  reverseCharge     Boolean       @default(false)
+  total             Float
+  status            InvoiceStatus @default(DRAFT)
+  paymentDate       DateTime?
+  paymentMethod     String?
+  lineItems         Json          // Array of line items
+  notes             String?
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  client            Client?       @relation("ClientSalesInvoices", fields: [clientId], references: [id])
+  subcontractor     Subcontractor? @relation("SubcontractorPurchaseInvoices", fields: [subcontractorId], references: [id])
+  bankTransactions  BankTransaction[]
+}
+
+model Timesheet {
+  id              String          @id @default(cuid())
+  subcontractorId String
+  periodStart     DateTime
+  periodEnd       DateTime
+  hoursWorked     Float
+  rate            Float
+  grossAmount     Float
+  cisDeduction    Float           @default(0)
+  netAmount       Float
+  status          TimesheetStatus @default(SUBMITTED)
+  submittedVia    String?         // "EMAIL", "MANUAL", etc.
+  approvedBy      String?
+  approvedAt      DateTime?
+  processedAt     DateTime?
+  paidAt          DateTime?
+  notes           String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  subcontractor   Subcontractor   @relation(fields: [subcontractorId], references: [id])
+}
+
+model BankTransaction {
+  id          String    @id @default(cuid())
+  date        DateTime
+  description String
+  amount      Float
+  type        TransactionType
+  category    String?
+  reconciled  Boolean   @default(false)
+  invoiceId   String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  invoice     Invoice?  @relation(fields: [invoiceId], references: [id])
+}
+
+model CompanyAsset {
+  id                  String    @id @default(cuid())
+  type                AssetType
+  name                String
+  registrationNumber  String?
+  motDueDate          DateTime?
+  taxDueDate          DateTime?
+  insuranceDueDate    DateTime?
+  serviceDueDate      DateTime?
+  remindersEnabled    Boolean   @default(true)
+  notes               String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+}
+
+model QuickLink {
+  id            String   @id @default(cuid())
+  name          String
+  url           String
+  category      String
+  displayOrder  Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model VATReturn {
+  id            String   @id @default(cuid())
+  periodStart   DateTime
+  periodEnd     DateTime
+  salesVAT      Float
+  purchaseVAT   Float
+  netVAT        Float
+  submittedDate DateTime?
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model CISReturn {
+  id                String   @id @default(cuid())
+  month             Int
+  year              Int
+  totalDeductions   Float
+  contractorsCount  Int
+  submittedDate     DateTime?
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  ACCOUNTANT
+  VIEWER
+}
+
+enum InvoiceType {
+  SALES
+  PURCHASE
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum CISStatus {
+  VERIFIED_GROSS
+  VERIFIED_NET
+  NOT_VERIFIED
+}
+
+enum PaymentType {
+  CIS
+  NON_CIS
+}
+
+enum TimesheetStatus {
+  SUBMITTED
+  APPROVED
+  REJECTED
+  PROCESSED
+  PAID
+}
+
+enum TransactionType {
+  DEBIT
+  CREDIT
+}
+
+enum AssetType {
+  VEHICLE
+  EQUIPMENT
+  OTHER
+}

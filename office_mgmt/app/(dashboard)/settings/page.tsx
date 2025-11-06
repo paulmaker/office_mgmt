@@ -1,0 +1,252 @@
+'use client'
+
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { Save, Building2, Users, Bell, Database, Mail } from 'lucide-react'
+
+export default function SettingsPage() {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
+          <p className="text-gray-500 mt-1">
+            Manage your account and application preferences
+          </p>
+        </div>
+        <Button>
+          <Save className="h-4 w-4 mr-2" />
+          Save Changes
+        </Button>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Company Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Company Information
+            </CardTitle>
+            <CardDescription>Update your business details</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="company-name">Company Name</Label>
+              <Input id="company-name" placeholder="Your Company Ltd" defaultValue="MakOps Construction" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="company-reg">Company Registration</Label>
+              <Input id="company-reg" placeholder="12345678" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="vat-number">VAT Number</Label>
+              <Input id="vat-number" placeholder="GB123456789" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="address">Business Address</Label>
+              <Input id="address" placeholder="123 Main Street, London" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone Number</Label>
+              <Input id="phone" placeholder="020 1234 5678" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* User Management */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              User Management
+            </CardTitle>
+            <CardDescription>Manage user accounts and permissions</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 border rounded-lg">
+                <div>
+                  <p className="font-medium">Admin User</p>
+                  <p className="text-sm text-gray-500">admin@example.com</p>
+                </div>
+                <Badge variant="default">Admin</Badge>
+              </div>
+              <div className="flex items-center justify-between p-3 border rounded-lg">
+                <div>
+                  <p className="font-medium">Accountant</p>
+                  <p className="text-sm text-gray-500">accountant@example.com</p>
+                </div>
+                <Badge variant="secondary">Accountant</Badge>
+              </div>
+            </div>
+            <Button variant="outline" className="w-full">
+              <Users className="h-4 w-4 mr-2" />
+              Add User
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Email Configuration */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Mail className="h-5 w-5" />
+              Email Configuration
+            </CardTitle>
+            <CardDescription>Configure email settings for timesheets and invoices</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="timesheet-email">Timesheet Email</Label>
+              <Input
+                id="timesheet-email"
+                type="email"
+                placeholder="timesheets@yourcompany.com"
+                defaultValue="timesheets@makops.co.uk"
+              />
+              <p className="text-xs text-gray-500">
+                Subcontractors send timesheets to this address
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="invoice-email">Invoice From Email</Label>
+              <Input
+                id="invoice-email"
+                type="email"
+                placeholder="invoices@yourcompany.com"
+                defaultValue="invoices@makops.co.uk"
+              />
+              <p className="text-xs text-gray-500">
+                Invoices will be sent from this address
+              </p>
+            </div>
+            <div className="flex items-center justify-between p-3 border rounded-lg bg-green-50">
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-green-600"></div>
+                <span className="text-sm font-medium">Email Connected</span>
+              </div>
+              <Badge variant="success">Active</Badge>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Notification Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5" />
+              Notifications
+            </CardTitle>
+            <CardDescription>Configure when you receive notifications</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Invoice Overdue</p>
+                <p className="text-sm text-gray-500">Get notified when invoices become overdue</p>
+              </div>
+              <input type="checkbox" className="h-4 w-4" defaultChecked />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Timesheet Submissions</p>
+                <p className="text-sm text-gray-500">Notify on new timesheet submissions</p>
+              </div>
+              <input type="checkbox" className="h-4 w-4" defaultChecked />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">Vehicle Reminders</p>
+                <p className="text-sm text-gray-500">MOT, tax, and insurance due dates</p>
+              </div>
+              <input type="checkbox" className="h-4 w-4" defaultChecked />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">CIS Return Reminder</p>
+                <p className="text-sm text-gray-500">Monthly CIS return deadline</p>
+              </div>
+              <input type="checkbox" className="h-4 w-4" defaultChecked />
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">VAT Return Reminder</p>
+                <p className="text-sm text-gray-500">Quarterly VAT return deadline</p>
+              </div>
+              <input type="checkbox" className="h-4 w-4" defaultChecked />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* CIS Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="h-5 w-5" />
+              CIS Configuration
+            </CardTitle>
+            <CardDescription>Configure CIS deduction rates</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Verified Net Rate</Label>
+              <div className="flex items-center gap-2">
+                <Input type="number" defaultValue="20" className="w-24" />
+                <span className="text-sm text-gray-500">%</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Not Verified Rate</Label>
+              <div className="flex items-center gap-2">
+                <Input type="number" defaultValue="30" className="w-24" />
+                <span className="text-sm text-gray-500">%</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Verified Gross Rate</Label>
+              <div className="flex items-center gap-2">
+                <Input type="number" defaultValue="0" className="w-24" />
+                <span className="text-sm text-gray-500">%</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* VAT Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle>VAT Configuration</CardTitle>
+            <CardDescription>Configure VAT rates and settings</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Standard VAT Rate</Label>
+              <div className="flex items-center gap-2">
+                <Input type="number" defaultValue="20" className="w-24" />
+                <span className="text-sm text-gray-500">%</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Reduced VAT Rate</Label>
+              <div className="flex items-center gap-2">
+                <Input type="number" defaultValue="5" className="w-24" />
+                <span className="text-sm text-gray-500">%</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-medium">VAT Registered</p>
+                <p className="text-sm text-gray-500">Is your company VAT registered?</p>
+              </div>
+              <input type="checkbox" className="h-4 w-4" defaultChecked />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
