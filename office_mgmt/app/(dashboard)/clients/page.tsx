@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/table'
 import { mockClients } from '@/lib/mock-data'
 import { formatDate } from '@/lib/utils'
-import { Plus, Search, Edit, Mail, Phone } from 'lucide-react'
+import { Plus, Search, Edit, Mail, Phone, MapPin } from 'lucide-react'
 
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState('')
@@ -67,6 +67,7 @@ export default function ClientsPage() {
                 <TableHead>Client Name</TableHead>
                 <TableHead>Company</TableHead>
                 <TableHead>Contact</TableHead>
+                <TableHead>Address</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Payment Terms</TableHead>
                 <TableHead>Created</TableHead>
@@ -91,6 +92,16 @@ export default function ClientsPage() {
                         </div>
                       )}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    {client.address ? (
+                      <div className="flex items-center gap-1 text-sm">
+                        <MapPin className="h-3 w-3 text-gray-400 flex-shrink-0" />
+                        <span className="text-gray-600">{client.address}</span>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-gray-400">-</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
