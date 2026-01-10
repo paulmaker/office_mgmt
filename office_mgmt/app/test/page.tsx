@@ -1,2 +1,3 @@
-import React from 'react';
-export default () => <div>TEST</div>;
+export default function TestPage() {
+  return <div>TEST</div>;
+}

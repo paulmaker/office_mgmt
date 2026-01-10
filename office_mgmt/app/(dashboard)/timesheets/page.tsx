@@ -14,7 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { mockTimesheets, mockSubcontractors } from '@/lib/mock-data'
-import { formatCurrency, formatDate, getTimesheetStatusColor } from '@/lib/utils'
+import { formatCurrency, formatDate } from '@/lib/utils'
 import { Plus, Search, Check, X, Download } from 'lucide-react'
 
 export default function TimesheetsPage() {
