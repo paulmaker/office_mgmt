@@ -75,3 +75,12 @@ export function generateInvoiceNumber(type: 'SALES' | 'PURCHASE'): string {
   const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0')
   return `${prefix}-${year}${month}-${random}`
 }
+
+export function getJobStatusColor(status: string): string {
+  const colors: Record<string, string> = {
+    PENDING: 'text-yellow-600 bg-yellow-100',
+    IN_PROGRESS: 'text-blue-600 bg-blue-100',
+    COMPLETE: 'text-green-600 bg-green-100',
+  }
+  return colors[status] || 'text-gray-500 bg-gray-100'
+}
