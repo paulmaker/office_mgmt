@@ -14,11 +14,13 @@ import {
   Truck,
   Settings,
   Link2,
+  ClipboardList,
 } from 'lucide-react'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Clients', href: '/clients', icon: Users },
+  { name: 'Jobs', href: '/jobs', icon: ClipboardList },
   { name: 'Invoices', href: '/invoices', icon: FileText },
   { name: 'Timesheets', href: '/timesheets', icon: Clock },
   { name: 'CIS Payroll', href: '/payroll', icon: Banknote },

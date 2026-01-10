@@ -79,6 +79,7 @@ model Client {
   updatedAt       DateTime @updatedAt
 
   salesInvoices   Invoice[] @relation("ClientSalesInvoices")
+  jobs            Job[]
 }
 
 model Subcontractor {
@@ -218,6 +219,38 @@ model CISReturn {
   updatedAt         DateTime @updatedAt
 }
 
+model Employee {
+  id            String   @id @default(cuid())
+  name           String
+  email          String?  @unique
+  phone          String?
+  employeeId     String?  @unique
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  jobs           Job[]
+}
+
+model Job {
+  id                String     @id @default(cuid())
+  jobNumber         String     @unique
+  clientId          String
+  employeeId        String?
+  jobDescription    String
+  dateWorkCommenced DateTime
+  price             Float
+  status            JobStatus  @default(PENDING)
+  invoicePaid       Boolean    @default(false)
+  invoiceId         String?    // Link to invoice when invoiced
+  notes             String?
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+
+  client            Client     @relation(fields: [clientId], references: [id])
+  employee          Employee?  @relation(fields: [employeeId], references: [id])
+}
+
 // Enums
 enum UserRole {
   ADMIN
@@ -266,4 +299,10 @@ enum AssetType {
   VEHICLE
   EQUIPMENT
   OTHER
+}
+
+enum JobStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETE
 }

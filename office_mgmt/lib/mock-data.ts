@@ -421,6 +421,117 @@ export const mockQuickLinks = [
   },
 ]
 
+export const mockEmployees = [
+  {
+    id: '1',
+    name: 'Dave',
+    email: 'dave@example.com',
+    phone: '07700 900111',
+    employeeId: 'EMP001',
+    notes: 'Lead painter',
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  },
+  {
+    id: '2',
+    name: 'Sarah',
+    email: 'sarah@example.com',
+    phone: '07700 900222',
+    employeeId: 'EMP002',
+    notes: 'Plasterer',
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  },
+  {
+    id: '3',
+    name: 'Mike',
+    email: 'mike@example.com',
+    phone: '07700 900333',
+    employeeId: 'EMP003',
+    notes: 'General operative',
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+  },
+]
+
+export const mockJobs = [
+  {
+    id: '1',
+    jobNumber: '1234',
+    clientId: '1',
+    employeeId: '1',
+    jobDescription: '1 bed flat paint, color grey',
+    dateWorkCommenced: new Date('2026-01-20'),
+    price: 150.00,
+    status: 'COMPLETE',
+    invoicePaid: true,
+    invoiceId: '1',
+    notes: null,
+    createdAt: new Date('2026-01-15'),
+    updatedAt: new Date('2026-01-25'),
+  },
+  {
+    id: '2',
+    jobNumber: '1235',
+    clientId: '1',
+    employeeId: '2',
+    jobDescription: '2 bed flat plastering - living room',
+    dateWorkCommenced: new Date('2026-01-22'),
+    price: 450.00,
+    status: 'IN_PROGRESS',
+    invoicePaid: false,
+    invoiceId: null,
+    notes: 'Materials delivered',
+    createdAt: new Date('2026-01-20'),
+    updatedAt: new Date('2026-01-22'),
+  },
+  {
+    id: '3',
+    jobNumber: '1236',
+    clientId: '2',
+    employeeId: '1',
+    jobDescription: 'Bathroom paint - white',
+    dateWorkCommenced: new Date('2026-01-25'),
+    price: 200.00,
+    status: 'PENDING',
+    invoicePaid: false,
+    invoiceId: null,
+    notes: null,
+    createdAt: new Date('2026-01-23'),
+    updatedAt: new Date('2026-01-23'),
+  },
+  {
+    id: '4',
+    jobNumber: '1237',
+    clientId: '2',
+    employeeId: '3',
+    jobDescription: 'Kitchen tiling - backsplash',
+    dateWorkCommenced: new Date('2026-01-28'),
+    price: 350.00,
+    status: 'PENDING',
+    invoicePaid: false,
+    invoiceId: null,
+    notes: 'Awaiting materials',
+    createdAt: new Date('2026-01-25'),
+    updatedAt: new Date('2026-01-25'),
+  },
+  {
+    id: '5',
+    jobNumber: '1238',
+    clientId: '3',
+    employeeId: '2',
+    jobDescription: 'Complete flat renovation - 1 bed',
+    dateWorkCommenced: new Date('2026-02-01'),
+    price: 1200.00,
+    status: 'IN_PROGRESS',
+    invoicePaid: false,
+    invoiceId: null,
+    notes: 'Large job - multiple weeks',
+    createdAt: new Date('2026-01-28'),
+    updatedAt: new Date('2026-02-01'),
+  },
+]
+
 // Calculate dashboard statistics from mock data
 export function getDashboardStats() {
   const totalRevenue = mockInvoices
@@ -476,7 +587,7 @@ export function getRecentActivity() {
   // Add invoice activities
   mockInvoices.slice(0, 5).forEach(inv => {
     activities.push({
-      id: inv.id,
+      id: `invoice-${inv.id}`,
       type: inv.type === 'SALES' ? 'invoice_sent' : 'purchase_invoice',
       description: `${inv.type === 'SALES' ? 'Sales' : 'Purchase'} Invoice ${inv.invoiceNumber} - ${inv.status}`,
       date: inv.updatedAt,
@@ -488,7 +599,7 @@ export function getRecentActivity() {
   mockTimesheets.slice(0, 3).forEach(ts => {
     const subcontractor = mockSubcontractors.find(s => s.id === ts.subcontractorId)
     activities.push({
-      id: ts.id,
+      id: `timesheet-${ts.id}`,
       type: 'timesheet',
       description: `Timesheet ${ts.status} - ${subcontractor?.name}`,
       date: ts.updatedAt,
