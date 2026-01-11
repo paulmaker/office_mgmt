@@ -1,2 +1,6 @@
 import React from 'react';
-export default () => <div>TEST</div>;
+
+const TestPage = () => <div>TEST</div>;
+TestPage.displayName = 'TestPage';
+
+export default TestPage;
