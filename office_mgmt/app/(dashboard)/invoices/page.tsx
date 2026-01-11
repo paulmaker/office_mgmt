@@ -15,7 +15,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { mockInvoices, mockClients, mockSubcontractors } from '@/lib/mock-data'
-import { formatCurrency, formatDate, getInvoiceStatusColor } from '@/lib/utils'
+import { formatCurrency, formatDate } from '@/lib/utils'
 import { Plus, Search, Download, Eye, Mail } from 'lucide-react'
 
 export default function InvoicesPage() {
