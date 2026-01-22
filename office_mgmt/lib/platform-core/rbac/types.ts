@@ -21,7 +21,7 @@ export type UserPermission = {
 }
 
 export type PermissionCheck = {
-  resource: string
-  action: string
+  resource?: string
+  action?: string
   module?: string
 }

@@ -69,8 +69,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.accountId = (user as any).accountId
         
         // Load permissions and cache in JWT
-        const permissions = await getUserPermissions(user.id)
-        token.permissions = permissions
+        if (user.id) {
+          const permissions = await getUserPermissions(user.id)
+          token.permissions = permissions
+        }
       }
       
       // If role changed (via trigger), refresh permissions
