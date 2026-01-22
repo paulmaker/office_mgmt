@@ -2,6 +2,8 @@ import NextAuth from "next-auth"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import { prisma } from "@/lib/prisma"
 import CredentialsProvider from "next-auth/providers/credentials"
+import { getUserPermissions } from "@/lib/platform-core/rbac"
+import { getUserEntity } from "@/lib/platform-core/multi-tenancy"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -18,10 +20,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
 
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string }
+          where: { email: credentials.email as string },
+          include: {
+            entity: {
+              include: {
+                tenantAccount: {
+                  select: {
+                    id: true,
+                  },
+                },
+              },
+            },
+          },
         })
 
-        if (!user) return null
+        if (!user || !user.isActive) return null
 
         // TODO: Implement password hashing check when password field is added to User model
         // For now, this is a placeholder that allows any user to sign in
@@ -35,6 +48,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           email: user.email,
           name: user.name,
           role: user.role,
+          entityId: user.entityId,
+          accountId: user.entity?.tenantAccountId,
         }
       }
     })
@@ -46,20 +61,58 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     strategy: "jwt",
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
+      // Initial sign in
       if (user) {
         token.role = (user as any).role
+        token.entityId = (user as any).entityId
+        token.accountId = (user as any).accountId
+        
+        // Load permissions and cache in JWT
+        const permissions = await getUserPermissions(user.id)
+        token.permissions = permissions
       }
+      
+      // If role changed (via trigger), refresh permissions
+      if (trigger === "update" && token.sub) {
+        const updatedUser = await prisma.user.findUnique({
+          where: { id: token.sub as string },
+          select: { role: true },
+        })
+        
+        if (updatedUser && updatedUser.role !== token.role) {
+          token.role = updatedUser.role
+          const permissions = await getUserPermissions(token.sub as string)
+          token.permissions = permissions
+        }
+      }
+      
       return token
     },
     async session({ session, token }) {
       if (session.user && token) {
-        const tokenWithRole = token as { role?: string; sub?: string }
-        if (tokenWithRole.role) {
-          (session.user as any).role = tokenWithRole.role
+        const tokenData = token as {
+          role?: string
+          sub?: string
+          entityId?: string
+          accountId?: string
+          permissions?: string[]
         }
-        if (token.sub) {
-          (session.user as any).id = token.sub
+        
+        if (tokenData.sub) {
+          (session.user as any).id = tokenData.sub
+        }
+        if (tokenData.role) {
+          (session.user as any).role = tokenData.role
+        }
+        if (tokenData.entityId) {
+          (session.user as any).entityId = tokenData.entityId
+        }
+        if (tokenData.accountId) {
+          (session.user as any).accountId = tokenData.accountId
+        }
+        if (tokenData.permissions) {
+          (session.user as any).permissions = tokenData.permissions
         }
       }
       return session

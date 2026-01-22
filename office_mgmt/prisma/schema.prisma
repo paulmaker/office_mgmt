@@ -10,22 +10,112 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============================================
+// Platform Core: Multi-Tenancy
+// ============================================
+
+model TenantAccount {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  isActive    Boolean  @default(true)
+  settings    Json?    // Tenant-specific settings (terminology, branding, modules)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  createdBy  String?  // Platform Admin who created it
+
+  entities   Entity[]
+}
+
+model Entity {
+  id              String   @id @default(cuid())
+  tenantAccountId String
+  name            String
+  slug            String   // Unique within TenantAccount
+  isActive        Boolean  @default(true)
+  settings        Json?    // Entity-specific settings
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenantAccount   TenantAccount @relation(fields: [tenantAccountId], references: [id], onDelete: Cascade)
+  users           User[]
+  clients         Client[]
+  invoices        Invoice[]
+  timesheets      Timesheet[]
+  subcontractors  Subcontractor[]
+  bankTransactions BankTransaction[]
+  assets          CompanyAsset[]
+  jobs            Job[]
+  employees       Employee[]
+  vatReturns      VATReturn[]
+  cisReturns      CISReturn[]
+  quickLinks      QuickLink[]
+
+  @@unique([tenantAccountId, slug])
+  @@index([tenantAccountId])
+}
+
+// ============================================
+// Platform Core: RBAC
+// ============================================
+
+model Permission {
+  id          String   @id @default(cuid())
+  resource    String   // e.g., "clients", "invoices", "timesheets"
+  action      String   // e.g., "read", "create", "update", "delete", "approve"
+  module      String?  // e.g., "banking", "payroll", "reports"
+  description String?
+
+  rolePermissions RolePermission[]
+
+  @@unique([resource, action, module])
+  @@index([resource, action])
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  role         Role
+  permissionId String
+  createdAt    DateTime   @default(now())
+
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([role, permissionId])
+  @@index([role])
+}
+
+enum Role {
+  PLATFORM_ADMIN  // System-wide admin
+  ACCOUNT_ADMIN   // Account-level admin
+  ENTITY_ADMIN    // Entity-level admin
+  ENTITY_USER     // Regular user (permissions assigned)
+}
+
+// ============================================
 // Authentication & Users
+// ============================================
+
 model User {
   id            String    @id @default(cuid())
   name          String?
   email         String    @unique
   emailVerified DateTime?
   image         String?
-  role          UserRole  @default(ACCOUNTANT)
+  entityId      String    // User belongs to one Entity
+  role          Role      @default(ENTITY_USER)
+  isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts      Account[]
+  entity        Entity    @relation(fields: [entityId], references: [id])
+  authAccounts  AuthAccount[]
   sessions      Session[]
+
+  @@index([entityId])
+  @@index([email])
 }
 
-model Account {
+model AuthAccount {
   id                String  @id @default(cuid())
   userId            String
   type              String
@@ -60,9 +150,13 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
+// ============================================
 // Business Models
+// ============================================
+
 model Client {
   id              String   @id @default(cuid())
+  entityId        String   // Scoped to Entity
   name            String
   companyName     String?
   email           String
@@ -78,14 +172,18 @@ model Client {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  entity          Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
   salesInvoices   Invoice[] @relation("ClientSalesInvoices")
   jobs            Job[]
+
+  @@index([entityId])
 }
 
 model Subcontractor {
   id                     String   @id @default(cuid())
+  entityId               String   // Scoped to Entity
   name                   String
-  email                  String   @unique
+  email                  String
   phone                  String?
   address                String?
   niNumber               String?
@@ -98,13 +196,18 @@ model Subcontractor {
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
+  entity                 Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
   timesheets             Timesheet[]
   purchaseInvoices       Invoice[] @relation("SubcontractorPurchaseInvoices")
+
+  @@unique([entityId, email])
+  @@index([entityId])
 }
 
 model Invoice {
   id                String        @id @default(cuid())
-  invoiceNumber     String        @unique
+  entityId          String        // Scoped to Entity
+  invoiceNumber     String
   type              InvoiceType
   clientId          String?
   subcontractorId   String?
@@ -125,13 +228,18 @@ model Invoice {
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 
+  entity            Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
   client            Client?       @relation("ClientSalesInvoices", fields: [clientId], references: [id])
   subcontractor     Subcontractor? @relation("SubcontractorPurchaseInvoices", fields: [subcontractorId], references: [id])
   bankTransactions  BankTransaction[]
+
+  @@unique([entityId, invoiceNumber])
+  @@index([entityId])
 }
 
 model Timesheet {
   id              String          @id @default(cuid())
+  entityId        String          // Scoped to Entity
   subcontractorId String
   periodStart     DateTime
   periodEnd       DateTime
@@ -150,11 +258,15 @@ model Timesheet {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
+  entity          Entity          @relation(fields: [entityId], references: [id], onDelete: Cascade)
   subcontractor   Subcontractor   @relation(fields: [subcontractorId], references: [id])
+
+  @@index([entityId])
 }
 
 model BankTransaction {
   id          String    @id @default(cuid())
+  entityId   String    // Scoped to Entity
   date        DateTime
   description String
   amount      Float
@@ -166,11 +278,15 @@ model BankTransaction {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  entity      Entity    @relation(fields: [entityId], references: [id], onDelete: Cascade)
   invoice     Invoice?  @relation(fields: [invoiceId], references: [id])
+
+  @@index([entityId])
 }
 
 model CompanyAsset {
   id                  String    @id @default(cuid())
+  entityId           String    // Scoped to Entity
   type                AssetType
   name                String
   registrationNumber  String?
@@ -182,20 +298,30 @@ model CompanyAsset {
   notes               String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+
+  entity              Entity    @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityId])
 }
 
 model QuickLink {
   id            String   @id @default(cuid())
+  entityId     String   // Scoped to Entity
   name          String
   url           String
   category      String
   displayOrder  Int      @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  entity        Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityId])
 }
 
 model VATReturn {
   id            String   @id @default(cuid())
+  entityId     String   // Scoped to Entity
   periodStart   DateTime
   periodEnd     DateTime
   salesVAT      Float
@@ -205,10 +331,15 @@ model VATReturn {
   notes         String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  entity        Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityId])
 }
 
 model CISReturn {
   id                String   @id @default(cuid())
+  entityId         String   // Scoped to Entity
   month             Int
   year              Int
   totalDeductions   Float
@@ -217,24 +348,35 @@ model CISReturn {
   notes             String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  entity            Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityId])
 }
 
 model Employee {
   id            String   @id @default(cuid())
+  entityId     String   // Scoped to Entity
   name           String
-  email          String?  @unique
+  email          String?
   phone          String?
-  employeeId     String?  @unique
+  employeeId     String?
   notes          String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  jobs           Job[]
+  entity        Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  jobs          Job[]
+
+  @@unique([entityId, email])
+  @@unique([entityId, employeeId])
+  @@index([entityId])
 }
 
 model Job {
   id                String     @id @default(cuid())
-  jobNumber         String     @unique
+  entityId         String     // Scoped to Entity
+  jobNumber         String
   clientId          String
   employeeId        String?
   jobDescription    String
@@ -247,16 +389,16 @@ model Job {
   createdAt         DateTime   @default(now())
   updatedAt         DateTime   @updatedAt
 
+  entity            Entity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
   client            Client     @relation(fields: [clientId], references: [id])
   employee          Employee?  @relation(fields: [employeeId], references: [id])
+
+  @@unique([entityId, jobNumber])
+  @@index([entityId])
 }
 
 // Enums
-enum UserRole {
-  ADMIN
-  ACCOUNTANT
-  VIEWER
-}
+// Note: UserRole enum removed - using Role enum from RBAC system instead
 
 enum InvoiceType {
   SALES
