@@ -1,10 +1,9 @@
-import { auth } from "@/app/api/auth/[...nextauth]/route"
 import { NextResponse, type NextRequest } from "next/server"
+import { auth } from "@/app/api/auth/[...nextauth]/route"
 
-export async function middleware(request: NextRequest) {
-  const session = await auth()
+export default auth((request) => {
   const { pathname } = request.nextUrl
-  const isLoggedIn = !!session
+  const isLoggedIn = !!request.auth
 
   // Public routes
   const publicRoutes = ['/login', '/api/auth']
@@ -26,7 +25,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL("/login", request.url))
     }
 
-    const role = (session?.user as any)?.role
+    const role = (request.auth?.user as any)?.role
     // Only Platform Admins, Account Admins, and Entity Admins can access admin
     if (!role || !['PLATFORM_ADMIN', 'ACCOUNT_ADMIN', 'ENTITY_ADMIN'].includes(role)) {
       return NextResponse.redirect(new URL("/dashboard", request.url))
@@ -34,7 +33,7 @@ export async function middleware(request: NextRequest) {
   }
 
   return NextResponse.next()
-}
+})
 
 export const config = {
   matcher: ["/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)"],
