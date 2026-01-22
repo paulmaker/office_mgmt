@@ -15,6 +15,7 @@ import {
   Settings,
   Link2,
   ClipboardList,
+  Shield,
 } from 'lucide-react'
 
 const navigation = [
@@ -28,6 +29,7 @@ const navigation = [
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'Assets', href: '/assets', icon: Truck },
   { name: 'Quick Links', href: '/quick-links', icon: Link2 },
+  { name: 'Admin', href: '/admin', icon: Shield },
   { name: 'Settings', href: '/settings', icon: Settings },
 ]
 
