@@ -15,41 +15,54 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
+        if (!credentials?.email) {
           return null
         }
 
-        const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
-          include: {
-            entity: {
-              include: {
-                tenantAccount: {
-                  select: {
-                    id: true,
+        // TODO: Re-enable password check when password field is added to User model
+        // For now, password check is disabled for development
+        // if (!credentials?.password) {
+        //   return null
+        // }
+
+        try {
+          const user = await prisma.user.findUnique({
+            where: { email: credentials.email as string },
+            include: {
+              entity: {
+                include: {
+                  tenantAccount: {
+                    select: {
+                      id: true,
+                    },
                   },
                 },
               },
             },
-          },
-        })
+          })
 
-        if (!user || !user.isActive) return null
+          if (!user || !user.isActive || !user.entity) {
+            return null
+          }
 
-        // TODO: Implement password hashing check when password field is added to User model
-        // For now, this is a placeholder that allows any user to sign in
-        // In production, you'll need to:
-        // 1. Add password field to User model
-        // 2. Hash passwords on user creation
-        // 3. Compare hashed passwords here
-        
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-          entityId: user.entityId,
-          accountId: user.entity?.tenantAccountId,
+          // TODO: Implement password hashing check when password field is added to User model
+          // For now, this is a placeholder that allows any user to sign in
+          // In production, you'll need to:
+          // 1. Add password field to User model
+          // 2. Hash passwords on user creation
+          // 3. Compare hashed passwords here
+          
+          return {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.role,
+            entityId: user.entityId,
+            accountId: user.entity?.tenantAccountId,
+          }
+        } catch (error) {
+          console.error('[AUTH] Error during authorization:', error)
+          return null
         }
       }
     })
@@ -64,14 +77,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user, trigger }) {
       // Initial sign in
       if (user) {
-        token.role = (user as any).role
-        token.entityId = (user as any).entityId
-        token.accountId = (user as any).accountId
-        
-        // Load permissions and cache in JWT
-        if (user.id) {
-          const permissions = await getUserPermissions(user.id)
-          token.permissions = permissions
+        try {
+          token.role = (user as any).role
+          token.entityId = (user as any).entityId
+          token.accountId = (user as any).accountId
+          
+          // Load permissions and cache in JWT
+          if (user.id) {
+            const permissions = await getUserPermissions(user.id)
+            token.permissions = permissions
+          }
+        } catch (error) {
+          console.error('[AUTH] JWT callback error:', error)
+          // Don't fail the login if permissions fail to load
         }
       }
       
