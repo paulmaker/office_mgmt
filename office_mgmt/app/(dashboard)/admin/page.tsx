@@ -1,11 +1,39 @@
 'use client'
 
+import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
+import { useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Building2, Users, Briefcase } from 'lucide-react'
 import Link from 'next/link'
 
 export default function AdminPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (status === 'loading') return
+
+    if (!session) {
+      router.push('/login')
+      return
+    }
+
+    const role = (session.user as any)?.role
+    if (!['PLATFORM_ADMIN', 'ACCOUNT_ADMIN', 'ENTITY_ADMIN'].includes(role)) {
+      router.push('/dashboard')
+    }
+  }, [session, status, router])
+
+  if (status === 'loading' || !session) {
+    return <div className="p-6">Loading...</div>
+  }
+
+  const role = (session.user as any)?.role
+  if (!['PLATFORM_ADMIN', 'ACCOUNT_ADMIN', 'ENTITY_ADMIN'].includes(role)) {
+    return null
+  }
   return (
     <div className="space-y-6">
       <div>
