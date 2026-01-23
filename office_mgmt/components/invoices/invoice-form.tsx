@@ -10,6 +10,7 @@ import { getClients } from '@/app/actions/clients'
 import { getSubcontractors } from '@/app/actions/subcontractors'
 import { getSuppliers } from '@/app/actions/suppliers'
 import { getJobsByClient } from '@/app/actions/jobs'
+import { getJobPrices } from '@/app/actions/job-prices'
 import { formatCurrency } from '@/lib/utils'
 import { Plus, Trash2 } from 'lucide-react'
 import type { Invoice, Client, Subcontractor, Supplier, InvoiceType, InvoiceStatus } from '@prisma/client'
@@ -52,6 +53,7 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
   const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [availableJobs, setAvailableJobs] = useState<any[]>([])
+  const [jobPrices, setJobPrices] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   const {
@@ -142,6 +144,30 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
     }
     loadJobs()
   }, [selectedClientId, invoiceType])
+
+  useEffect(() => {
+    const loadJobPrices = async () => {
+      if (selectedClientId && invoiceType === 'SALES') {
+        try {
+          const prices = await getJobPrices(selectedClientId)
+          setJobPrices(prices.filter(jp => jp.isActive))
+        } catch (err) {
+          console.error('Failed to load job prices:', err)
+          setJobPrices([])
+        }
+      } else {
+        setJobPrices([])
+      }
+    }
+    loadJobPrices()
+  }, [selectedClientId, invoiceType])
+
+  const addJobPriceToLineItems = (jobPrice: any) => {
+    append({
+      description: jobPrice.jobType,
+      amount: jobPrice.price,
+    })
+  }
 
   const onSubmit = async (data: InvoiceFormData) => {
     setIsSubmitting(true)
@@ -333,6 +359,30 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
           )}
         </div>
       </div>
+
+      {/* Job Prices Selection for Sales Invoices */}
+      {invoiceType === 'SALES' && selectedClientId && jobPrices.length > 0 && (
+        <div className="space-y-2 p-4 bg-green-50 rounded-lg border border-green-200">
+          <Label>Quick Add from Job Prices</Label>
+          <div className="flex flex-wrap gap-2">
+            {jobPrices.map((jp) => (
+              <Button
+                key={jp.id}
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addJobPriceToLineItems(jp)}
+                className="text-xs"
+              >
+                {jp.jobType} - {formatCurrency(jp.price)}
+              </Button>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500">
+            Click a job price to add it as a line item
+          </p>
+        </div>
+      )}
 
       {/* Job Selection for Sales Invoices */}
       {invoiceType === 'SALES' && selectedClientId && availableJobs.length > 0 && (

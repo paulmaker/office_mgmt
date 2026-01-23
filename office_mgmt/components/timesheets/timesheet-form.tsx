@@ -16,6 +16,8 @@ interface TimesheetFormData {
   periodEnd: string
   hoursWorked: number
   rate: number
+  additionalHours: number
+  additionalHoursRate: number
   expenses: number
   receiptsReceived: boolean
   submittedDate?: string
@@ -48,6 +50,8 @@ export function TimesheetForm({ timesheet, onSuccess, onCancel }: TimesheetFormP
           periodEnd: timesheet.periodEnd.toISOString().split('T')[0],
           hoursWorked: timesheet.hoursWorked,
           rate: timesheet.rate,
+          additionalHours: (timesheet as any).additionalHours || 0,
+          additionalHoursRate: (timesheet as any).additionalHoursRate || 0,
           expenses: timesheet.expenses || 0,
           receiptsReceived: timesheet.receiptsReceived || false,
           submittedDate: timesheet.submittedDate?.toISOString().split('T')[0],
@@ -55,6 +59,8 @@ export function TimesheetForm({ timesheet, onSuccess, onCancel }: TimesheetFormP
           notes: timesheet.notes || '',
         }
       : {
+          additionalHours: 0,
+          additionalHoursRate: 0,
           expenses: 0,
           receiptsReceived: false,
           submittedVia: 'MANUAL',
@@ -63,8 +69,12 @@ export function TimesheetForm({ timesheet, onSuccess, onCancel }: TimesheetFormP
 
   const hoursWorked = watch('hoursWorked') || 0
   const rate = watch('rate') || 0
+  const additionalHours = watch('additionalHours') || 0
+  const additionalHoursRate = watch('additionalHoursRate') || 0
   const expenses = watch('expenses') || 0
-  const grossAmount = hoursWorked * rate
+  const regularAmount = hoursWorked * rate
+  const additionalAmount = additionalHours * additionalHoursRate
+  const grossAmount = regularAmount + additionalAmount
   // Note: CIS calculation would need subcontractor CIS status, shown as estimate
   const estimatedCIS = grossAmount * 0.20 // 20% estimate
   const netAmount = grossAmount - estimatedCIS + expenses
@@ -95,6 +105,8 @@ export function TimesheetForm({ timesheet, onSuccess, onCancel }: TimesheetFormP
         periodEnd: new Date(data.periodEnd),
         submittedDate: data.submittedDate ? new Date(data.submittedDate) : undefined,
         expenses: Number(data.expenses),
+        additionalHours: Number(data.additionalHours) || 0,
+        additionalHoursRate: Number(data.additionalHoursRate) || 0,
       }
 
       if (timesheet) {
@@ -215,6 +227,42 @@ export function TimesheetForm({ timesheet, onSuccess, onCancel }: TimesheetFormP
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
+          <Label htmlFor="additionalHours">Additional Hours</Label>
+          <Input
+            id="additionalHours"
+            type="number"
+            step="0.5"
+            {...register('additionalHours', {
+              valueAsNumber: true,
+              min: { value: 0, message: 'Must be 0 or greater' },
+            })}
+            placeholder="0"
+          />
+          {errors.additionalHours && (
+            <p className="text-sm text-red-500">{errors.additionalHours.message}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="additionalHoursRate">Additional Hours Rate (£/hr)</Label>
+          <Input
+            id="additionalHoursRate"
+            type="number"
+            step="0.01"
+            {...register('additionalHoursRate', {
+              valueAsNumber: true,
+              min: { value: 0, message: 'Must be 0 or greater' },
+            })}
+            placeholder="0.00"
+          />
+          {errors.additionalHoursRate && (
+            <p className="text-sm text-red-500">{errors.additionalHoursRate.message}</p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
           <Label htmlFor="expenses">Expenses (£)</Label>
           <Input
             id="expenses"
@@ -267,7 +315,17 @@ export function TimesheetForm({ timesheet, onSuccess, onCancel }: TimesheetFormP
 
       {/* Calculation Summary */}
       <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-        <div className="flex justify-between">
+        <div className="flex justify-between text-sm text-gray-600">
+          <span>Regular Hours ({hoursWorked} × {formatCurrency(rate)}):</span>
+          <span>{formatCurrency(regularAmount)}</span>
+        </div>
+        {additionalHours > 0 && additionalHoursRate > 0 && (
+          <div className="flex justify-between text-sm text-gray-600">
+            <span>Additional Hours ({additionalHours} × {formatCurrency(additionalHoursRate)}):</span>
+            <span>+{formatCurrency(additionalAmount)}</span>
+          </div>
+        )}
+        <div className="flex justify-between pt-1 border-t">
           <span className="text-sm font-medium">Gross Amount:</span>
           <span className="text-sm font-medium">{formatCurrency(grossAmount)}</span>
         </div>

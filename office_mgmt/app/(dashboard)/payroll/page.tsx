@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -11,15 +12,46 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { mockTimesheets, mockSubcontractors } from '@/lib/mock-data'
+import { getTimesheets } from '@/app/actions/timesheets'
+import { getSubcontractors } from '@/app/actions/subcontractors'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { Download, FileText, Calendar } from 'lucide-react'
+import type { Timesheet } from '@prisma/client'
+
+type TimesheetWithRelations = Timesheet & {
+  subcontractor: { name: string; cisStatus: string; cisVerificationNumber?: string | null }
+  additionalHours?: number
+  additionalHoursRate?: number
+}
 
 export default function PayrollPage() {
-  const approvedTimesheets = mockTimesheets.filter(t => t.status === 'APPROVED' || t.status === 'PROCESSED' || t.status === 'PAID')
+  const [timesheets, setTimesheets] = useState<TimesheetWithRelations[]>([])
+  const [subcontractors, setSubcontractors] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoading(true)
+        const [timesheetsData, subcontractorsData] = await Promise.all([
+          getTimesheets(),
+          getSubcontractors(),
+        ])
+        setTimesheets(timesheetsData as TimesheetWithRelations[])
+        setSubcontractors(subcontractorsData)
+      } catch (err) {
+        console.error('Failed to load data:', err)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    loadData()
+  }, [])
+
+  const approvedTimesheets = timesheets.filter(t => t.status === 'APPROVED' || t.status === 'PROCESSED' || t.status === 'PAID')
 
   const getSubcontractor = (id: string) => {
-    return mockSubcontractors.find(s => s.id === id)
+    return subcontractors.find(s => s.id === id)
   }
 
   const totalGross = approvedTimesheets.reduce((sum, t) => sum + t.grossAmount, 0)
@@ -168,9 +200,12 @@ export default function PayrollPage() {
               <TableRow>
                 <TableHead>Contractor</TableHead>
                 <TableHead>Period</TableHead>
-                <TableHead>Hours</TableHead>
+                <TableHead>Regular Hours</TableHead>
                 <TableHead>Rate</TableHead>
+                <TableHead>Additional Hours</TableHead>
+                <TableHead>Add. Rate</TableHead>
                 <TableHead>Gross</TableHead>
+                <TableHead>Expenses</TableHead>
                 <TableHead>CIS Rate</TableHead>
                 <TableHead>CIS Amount</TableHead>
                 <TableHead>Net Pay</TableHead>
@@ -178,33 +213,72 @@ export default function PayrollPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {approvedTimesheets.map((timesheet) => {
-                const sub = getSubcontractor(timesheet.subcontractorId)
-                const cisRate = timesheet.cisDeduction > 0 ? (timesheet.cisDeduction / timesheet.grossAmount) * 100 : 0
-                return (
-                  <TableRow key={timesheet.id}>
-                    <TableCell className="font-medium">{sub?.name}</TableCell>
-                    <TableCell className="text-sm text-gray-500">
-                      {formatDate(timesheet.periodStart)} - {formatDate(timesheet.periodEnd)}
-                    </TableCell>
-                    <TableCell>{timesheet.hoursWorked}h</TableCell>
-                    <TableCell>{formatCurrency(timesheet.rate)}</TableCell>
-                    <TableCell>{formatCurrency(timesheet.grossAmount)}</TableCell>
-                    <TableCell>{cisRate > 0 ? `${cisRate.toFixed(0)}%` : '-'}</TableCell>
-                    <TableCell className="text-red-600">
-                      {timesheet.cisDeduction > 0 ? `-${formatCurrency(timesheet.cisDeduction)}` : '-'}
-                    </TableCell>
-                    <TableCell className="font-medium text-green-600">
-                      {formatCurrency(timesheet.netAmount)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={timesheet.status === 'PAID' ? 'success' : 'default'}>
-                        {timesheet.status}
-                      </Badge>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={12} className="text-center py-8">
+                    Loading...
+                  </TableCell>
+                </TableRow>
+              ) : approvedTimesheets.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={12} className="text-center py-8 text-gray-500">
+                    No approved timesheets found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                approvedTimesheets.map((timesheet) => {
+                  const sub = getSubcontractor(timesheet.subcontractorId)
+                  const cisRate = timesheet.cisDeduction > 0 ? (timesheet.cisDeduction / timesheet.grossAmount) * 100 : 0
+                  const additionalHours = (timesheet as any).additionalHours || 0
+                  const additionalHoursRate = (timesheet as any).additionalHoursRate || 0
+                  const regularAmount = timesheet.hoursWorked * timesheet.rate
+                  const additionalAmount = additionalHours * additionalHoursRate
+                  return (
+                    <TableRow key={timesheet.id}>
+                      <TableCell className="font-medium">{sub?.name || 'Unknown'}</TableCell>
+                      <TableCell className="text-sm text-gray-500">
+                        {formatDate(timesheet.periodStart)} - {formatDate(timesheet.periodEnd)}
+                      </TableCell>
+                      <TableCell>{timesheet.hoursWorked}h @ {formatCurrency(timesheet.rate)}</TableCell>
+                      <TableCell>{formatCurrency(timesheet.rate)}</TableCell>
+                      <TableCell>
+                        {additionalHours > 0 ? (
+                          <span>{additionalHours}h @ {formatCurrency(additionalHoursRate)}</span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {additionalHoursRate > 0 ? formatCurrency(additionalHoursRate) : <span className="text-gray-400">-</span>}
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          <div>{formatCurrency(regularAmount)}</div>
+                          {additionalAmount > 0 && (
+                            <div className="text-xs text-gray-500">+{formatCurrency(additionalAmount)}</div>
+                          )}
+                          <div className="font-medium">{formatCurrency(timesheet.grossAmount)}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {timesheet.expenses > 0 ? formatCurrency(timesheet.expenses) : <span className="text-gray-400">-</span>}
+                      </TableCell>
+                      <TableCell>{cisRate > 0 ? `${cisRate.toFixed(0)}%` : '-'}</TableCell>
+                      <TableCell className="text-red-600">
+                        {timesheet.cisDeduction > 0 ? `-${formatCurrency(timesheet.cisDeduction)}` : '-'}
+                      </TableCell>
+                      <TableCell className="font-medium text-green-600">
+                        {formatCurrency(timesheet.netAmount)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={timesheet.status === 'PAID' ? 'success' : 'default'}>
+                          {timesheet.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              )}
             </TableBody>
           </Table>
         </CardContent>

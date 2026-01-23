@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { createJob, updateJob, getJob } from '@/app/actions/jobs'
 import { getClients } from '@/app/actions/clients'
 import { getEmployees } from '@/app/actions/employees'
+import { getJobPrices } from '@/app/actions/job-prices'
 import { formatCurrency } from '@/lib/utils'
 import { Plus, Trash2 } from 'lucide-react'
 import type { Job, Client, Employee, JobStatus, JobEmployee, JobLineItem as PrismaJobLineItem } from '@prisma/client'
@@ -44,11 +45,22 @@ interface JobFormProps {
   onCancel?: () => void
 }
 
+type JobPrice = {
+  id: string
+  clientId: string
+  jobType: string
+  description: string
+  price: number
+  isActive: boolean
+  notes?: string | null
+}
+
 export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [clients, setClients] = useState<Client[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [jobPrices, setJobPrices] = useState<JobPrice[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   const {
@@ -56,6 +68,7 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
     handleSubmit,
     control,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<JobFormData>({
     defaultValues: job
@@ -87,6 +100,7 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
   })
 
   const watchedLineItems = watch('lineItems')
+  const selectedClientId = watch('clientId')
   const total = watchedLineItems?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0
 
   useEffect(() => {
@@ -107,6 +121,32 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
     }
     loadData()
   }, [])
+
+  useEffect(() => {
+    const loadJobPrices = async () => {
+      if (selectedClientId) {
+        try {
+          const prices = await getJobPrices(selectedClientId)
+          setJobPrices(prices.filter(jp => jp.isActive))
+        } catch (err) {
+          console.error('Failed to load job prices:', err)
+          setJobPrices([])
+        }
+      } else {
+        setJobPrices([])
+      }
+    }
+    loadJobPrices()
+  }, [selectedClientId])
+
+  const addJobPriceToLineItems = (jobPrice: JobPrice) => {
+    const currentLineItems = watch('lineItems') || []
+    append({
+      description: jobPrice.jobType,
+      amount: jobPrice.price,
+      notes: jobPrice.description || '',
+    })
+  }
 
   const onSubmit = async (data: JobFormData) => {
     setIsSubmitting(true)
@@ -270,6 +310,29 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
           Hold Ctrl/Cmd to select multiple employees
         </p>
       </div>
+
+      {selectedClientId && jobPrices.length > 0 && (
+        <div className="space-y-2">
+          <Label>Quick Add from Job Prices</Label>
+          <div className="flex flex-wrap gap-2">
+            {jobPrices.map((jp) => (
+              <Button
+                key={jp.id}
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => addJobPriceToLineItems(jp)}
+                className="text-xs"
+              >
+                {jp.jobType} - {formatCurrency(jp.price)}
+              </Button>
+            ))}
+          </div>
+          <p className="text-xs text-gray-500">
+            Click a job price to add it as a line item
+          </p>
+        </div>
+      )}
 
       <div className="space-y-4">
         <div className="flex items-center justify-between">
