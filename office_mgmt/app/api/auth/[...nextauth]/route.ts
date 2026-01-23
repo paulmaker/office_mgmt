@@ -62,6 +62,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
         } catch (error) {
           console.error('[AUTH] Error during authorization:', error)
+          // Return null instead of throwing to prevent server errors
+          // This will show "Invalid email or password" to the user
           return null
         }
       }

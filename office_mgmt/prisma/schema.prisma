@@ -366,7 +366,7 @@ model Employee {
   updatedAt      DateTime @updatedAt
 
   entity        Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  jobs          Job[]
+  jobs          JobEmployee[]
 
   @@unique([entityId, email])
   @@unique([entityId, employeeId])
@@ -376,12 +376,11 @@ model Employee {
 model Job {
   id                String     @id @default(cuid())
   entityId         String     // Scoped to Entity
-  jobNumber         String
+  jobNumber         String     // Job number (can be client's reference number)
   clientId          String
-  employeeId        String?
   jobDescription    String
   dateWorkCommenced DateTime
-  price             Float
+  price             Float       // Total price (sum of line items)
   status            JobStatus  @default(PENDING)
   invoicePaid       Boolean    @default(false)
   invoiceId         String?    // Link to invoice when invoiced
@@ -391,10 +390,41 @@ model Job {
 
   entity            Entity     @relation(fields: [entityId], references: [id], onDelete: Cascade)
   client            Client     @relation(fields: [clientId], references: [id])
-  employee          Employee?  @relation(fields: [employeeId], references: [id])
+  employees         JobEmployee[]
+  lineItems         JobLineItem[]
 
   @@unique([entityId, jobNumber])
   @@index([entityId])
+}
+
+// Many-to-many relationship: Jobs can have multiple Employees
+model JobEmployee {
+  id        String   @id @default(cuid())
+  jobId     String
+  employeeId String
+  createdAt DateTime @default(now())
+
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  employee  Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, employeeId])
+  @@index([jobId])
+  @@index([employeeId])
+}
+
+// Job breakdown/line items (e.g., Bathroom, Living Room, Stairs)
+model JobLineItem {
+  id          String   @id @default(cuid())
+  jobId       String
+  description String   // e.g., "Bathroom", "Living Room", "Stairs"
+  amount      Float    // Price for this line item
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  job         Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
 }
 
 // Enums
