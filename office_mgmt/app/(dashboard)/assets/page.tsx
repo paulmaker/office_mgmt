@@ -12,15 +12,36 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { useState, useEffect } from 'react'
-import { getAssets } from '@/app/actions/assets'
+import { getAssets, deleteAsset } from '@/app/actions/assets'
 import { formatDate } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
-import { Plus, Truck, Wrench, AlertTriangle, CheckCircle, Calendar } from 'lucide-react'
+import { Plus, Truck, Wrench, AlertTriangle, CheckCircle, Calendar, Edit, Trash2 } from 'lucide-react'
 import type { CompanyAsset } from '@prisma/client'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { AssetForm } from '@/components/assets/asset-form'
 
 export default function AssetsPage() {
   const [assets, setAssets] = useState<CompanyAsset[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingAsset, setEditingAsset] = useState<CompanyAsset | null>(null)
+  const [deletingAssetId, setDeletingAssetId] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -41,6 +62,49 @@ export default function AssetsPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleCreate = () => {
+    setEditingAsset(null)
+    setIsDialogOpen(true)
+  }
+
+  const handleEdit = (asset: CompanyAsset) => {
+    setEditingAsset(asset)
+    setIsDialogOpen(true)
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteAsset(id)
+      await loadAssets()
+      toast({
+        variant: 'success',
+        title: 'Asset deleted',
+        description: 'Asset has been successfully deleted.',
+      })
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete asset',
+      })
+    } finally {
+      setDeleteDialogOpen(false)
+      setDeletingAssetId(null)
+    }
+  }
+
+  const handleFormSuccess = () => {
+    setIsDialogOpen(false)
+    setEditingAsset(null)
+    const action = editingAsset ? 'updated' : 'created'
+    toast({
+      variant: 'success',
+      title: `Asset ${action}`,
+      description: `Asset has been successfully ${action}.`,
+    })
+    loadAssets()
   }
   const getDaysUntil = (date: Date | null) => {
     if (!date) return null
@@ -105,7 +169,7 @@ export default function AssetsPage() {
             Manage company vehicles and equipment
           </p>
         </div>
-        <Button>
+        <Button onClick={handleCreate}>
           <Plus className="h-4 w-4 mr-2" />
           Add Asset
         </Button>
@@ -203,18 +267,19 @@ export default function AssetsPage() {
                 <TableHead>Company Car</TableHead>
                 <TableHead>MerseyFlow</TableHead>
                 <TableHead>Reminders</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8">
+                  <TableCell colSpan={11} className="text-center py-8">
                     <p className="text-gray-500">Loading assets...</p>
                   </TableCell>
                 </TableRow>
               ) : vehicles.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8">
+                  <TableCell colSpan={11} className="text-center py-8">
                     <p className="text-gray-500">No vehicles found</p>
                   </TableCell>
                 </TableRow>
@@ -285,6 +350,27 @@ export default function AssetsPage() {
                           <span className="text-gray-400 text-sm">Disabled</span>
                         )}
                       </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(vehicle)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setDeletingAssetId(vehicle.id)
+                              setDeleteDialogOpen(true)
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   )
                 })
@@ -312,6 +398,7 @@ export default function AssetsPage() {
                 <TableHead>Service Due</TableHead>
                 <TableHead>Notes</TableHead>
                 <TableHead>Reminders</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -342,6 +429,27 @@ export default function AssetsPage() {
                         <span className="text-gray-400 text-sm">Disabled</span>
                       )}
                     </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(item)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setDeletingAssetId(item.id)
+                            setDeleteDialogOpen(true)
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </div>
+                    </TableCell>
                   </TableRow>
                 )
               })}
@@ -349,6 +457,52 @@ export default function AssetsPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Create/Edit Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingAsset ? 'Edit Asset' : 'Create New Asset'}
+            </DialogTitle>
+          </DialogHeader>
+          <AssetForm
+            asset={editingAsset}
+            onSuccess={handleFormSuccess}
+            onCancel={() => {
+              setIsDialogOpen(false)
+              setEditingAsset(null)
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the asset.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeletingAssetId(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deletingAssetId) {
+                  handleDelete(deletingAssetId)
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
