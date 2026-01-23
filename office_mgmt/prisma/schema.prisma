@@ -50,6 +50,9 @@ model Entity {
   vatReturns      VATReturn[]
   cisReturns      CISReturn[]
   quickLinks      QuickLink[]
+  invoiceCodes    InvoiceCode[]
+  suppliers       Supplier[]
+  jobPrices       JobPrice[]
 
   @@unique([tenantAccountId, slug])
   @@index([tenantAccountId])
@@ -167,6 +170,7 @@ model Client {
   vatRegistered   Boolean  @default(false)
   cisRegistered   Boolean  @default(false)
   paymentTerms    Int      @default(30) // days
+  referenceCode   String?  // For generating invoice codes (e.g., "LU")
   ratesConfig     Json?    // Store hourly rates, job pricing
   notes           String?
   createdAt       DateTime @default(now())
@@ -175,7 +179,10 @@ model Client {
   entity          Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
   salesInvoices   Invoice[] @relation("ClientSalesInvoices")
   jobs            Job[]
+  invoiceCodes    InvoiceCode[]
+  jobPrices       JobPrice[]
 
+  @@unique([entityId, referenceCode])
   @@index([entityId])
 }
 
@@ -211,6 +218,7 @@ model Invoice {
   type              InvoiceType
   clientId          String?
   subcontractorId   String?
+  supplierId        String?       // For purchase invoices from suppliers
   date              DateTime      @default(now())
   dueDate           DateTime
   subtotal          Float
@@ -223,7 +231,7 @@ model Invoice {
   status            InvoiceStatus @default(DRAFT)
   paymentDate       DateTime?
   paymentMethod     String?
-  lineItems         Json          // Array of line items
+  lineItems         Json          // Array of line items (can include jobId references)
   notes             String?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
@@ -231,6 +239,7 @@ model Invoice {
   entity            Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
   client            Client?       @relation("ClientSalesInvoices", fields: [clientId], references: [id])
   subcontractor     Subcontractor? @relation("SubcontractorPurchaseInvoices", fields: [subcontractorId], references: [id])
+  supplier          Supplier?     @relation("SupplierPurchaseInvoices", fields: [supplierId], references: [id])
   bankTransactions  BankTransaction[]
 
   @@unique([entityId, invoiceNumber])
@@ -248,8 +257,11 @@ model Timesheet {
   grossAmount     Float
   cisDeduction    Float           @default(0)
   netAmount       Float
+  expenses        Float           @default(0)  // Expenses incurred
+  receiptsReceived Boolean        @default(false)  // Receipts received status
   status          TimesheetStatus @default(SUBMITTED)
   submittedVia    String?         // "EMAIL", "MANUAL", etc.
+  submittedDate   DateTime?       // Date timesheet was submitted
   approvedBy      String?
   approvedAt      DateTime?
   processedAt     DateTime?
@@ -265,21 +277,25 @@ model Timesheet {
 }
 
 model BankTransaction {
-  id          String    @id @default(cuid())
-  entityId   String    // Scoped to Entity
-  date        DateTime
-  description String
-  amount      Float
-  type        TransactionType
-  category    String?
-  reconciled  Boolean   @default(false)
-  invoiceId   String?
-  notes       String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  entityId         String    // Scoped to Entity
+  date              DateTime
+  description       String
+  amount            Float
+  type              TransactionType
+  category          String?
+  reconciled        Boolean   @default(false)
+  reconciliationDate DateTime?  // Date transaction was reconciled
+  reconciledBy      String?     // User ID who reconciled
+  invoiceId         String?
+  linkedTimesheetId String?     // Link to timesheet/payroll
+  documentUrl       String?     // PDF remittance document URL
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 
-  entity      Entity    @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  invoice     Invoice?  @relation(fields: [invoiceId], references: [id])
+  entity            Entity    @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  invoice           Invoice?  @relation(fields: [invoiceId], references: [id])
 
   @@index([entityId])
 }
@@ -294,6 +310,9 @@ model CompanyAsset {
   taxDueDate          DateTime?
   insuranceDueDate    DateTime?
   serviceDueDate      DateTime?
+  leaseExpiryDate     DateTime?  // Lease expiration date
+  merseyFlow          Boolean   @default(true)  // MerseyFlow toll system
+  companyCar          Boolean   @default(true)  // Is company car
   remindersEnabled    Boolean   @default(true)
   notes               String?
   createdAt           DateTime  @default(now())
@@ -361,6 +380,7 @@ model Employee {
   email          String?
   phone          String?
   employeeId     String?
+  car            String?  // Car details (e.g., "Ford Transit", "VW Golf")
   notes          String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -477,4 +497,69 @@ enum JobStatus {
   PENDING
   IN_PROGRESS
   COMPLETE
+}
+
+// ============================================
+// New Models for Client Requirements
+// ============================================
+
+// Invoice Code generation per client
+model InvoiceCode {
+  id            String   @id @default(cuid())
+  entityId      String
+  clientId      String
+  lastNumber    Int      @default(0)  // Last used number
+  prefix        String   // Client's reference code (e.g., "LU")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  entity        Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([entityId, clientId])
+  @@index([entityId])
+  @@index([clientId])
+}
+
+// Suppliers for purchase invoices
+model Supplier {
+  id              String   @id @default(cuid())
+  entityId        String
+  name            String
+  companyName     String?
+  email           String?
+  phone           String?
+  address         String?
+  vatNumber       String?
+  vatRegistered   Boolean  @default(false)
+  paymentTerms    Int      @default(30)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  entity          Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  purchaseInvoices Invoice[] @relation("SupplierPurchaseInvoices")
+
+  @@index([entityId])
+}
+
+// Job prices per client
+model JobPrice {
+  id            String   @id @default(cuid())
+  entityId      String
+  clientId      String
+  jobType       String   // e.g., "Bathroom", "Living Room", "Stairs", "Full House"
+  description   String   // Detailed description
+  price         Float
+  isActive      Boolean  @default(true)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  entity        Entity   @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([entityId, clientId, jobType])
+  @@index([entityId])
+  @@index([clientId])
 }
