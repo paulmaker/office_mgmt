@@ -148,33 +148,74 @@ export async function createTimesheet(data: {
   const netAmount = grossAmount - cisDeduction + expenses
 
   // Create timesheet
-  const timesheet = await prisma.timesheet.create({
-    data: {
-      entityId: userEntity.entityId,
-      subcontractorId: data.subcontractorId,
-      periodStart: data.periodStart,
-      periodEnd: data.periodEnd,
-      hoursWorked: data.hoursWorked,
-      rate: data.rate,
-      additionalHours,
-      additionalHoursRate,
-      grossAmount,
-      cisDeduction,
-      expenses,
-      netAmount,
-      receiptsReceived: data.receiptsReceived || false,
-      submittedDate: data.submittedDate,
-      submittedVia: data.submittedVia || 'MANUAL',
-      status: 'SUBMITTED',
-      notes: data.notes,
-    },
-    include: {
-      subcontractor: true,
-    },
-  })
-
-  revalidatePath('/timesheets')
-  return timesheet
+  // Note: additionalHours and additionalHoursRate may not exist in database if migration not applied
+  try {
+    const timesheet = await prisma.timesheet.create({
+      data: {
+        entityId: userEntity.entityId,
+        subcontractorId: data.subcontractorId,
+        periodStart: data.periodStart,
+        periodEnd: data.periodEnd,
+        hoursWorked: data.hoursWorked,
+        rate: data.rate,
+        additionalHours,
+        additionalHoursRate,
+        grossAmount,
+        cisDeduction,
+        expenses,
+        netAmount,
+        receiptsReceived: data.receiptsReceived || false,
+        submittedDate: data.submittedDate,
+        submittedVia: data.submittedVia || 'MANUAL',
+        status: 'SUBMITTED',
+        notes: data.notes,
+      },
+      include: {
+        subcontractor: true,
+      },
+    })
+    revalidatePath('/timesheets')
+    return timesheet
+  } catch (error: any) {
+    // If the error is about missing columns (migration not applied), try without additional hours fields
+    const errorMessage = error?.message || ''
+    const errorCode = error?.code || ''
+    
+    if (
+      errorMessage.includes('additionalHours') || 
+      errorMessage.includes('column') && errorMessage.includes('does not exist') ||
+      errorCode === 'P2001' || 
+      errorCode === 'P2010' ||
+      errorCode === '42703' // PostgreSQL error code for undefined column
+    ) {
+      // Fallback: create without additional hours fields (for databases without migration)
+      const timesheet = await prisma.timesheet.create({
+        data: {
+          entityId: userEntity.entityId,
+          subcontractorId: data.subcontractorId,
+          periodStart: data.periodStart,
+          periodEnd: data.periodEnd,
+          hoursWorked: data.hoursWorked,
+          rate: data.rate,
+          grossAmount,
+          cisDeduction,
+          expenses,
+          netAmount,
+          receiptsReceived: data.receiptsReceived || false,
+          submittedDate: data.submittedDate,
+          submittedVia: data.submittedVia || 'MANUAL',
+          status: 'SUBMITTED',
+          notes: data.notes,
+        } as any, // Type assertion needed if fields don't exist in schema
+        include: {
+          subcontractor: true,
+        },
+      })
+      revalidatePath('/timesheets')
+      return timesheet
+    }
+    throw error
+  }
 }
 
 /**
