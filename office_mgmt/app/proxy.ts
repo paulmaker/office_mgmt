@@ -3,7 +3,6 @@ import { NextResponse } from "next/server"
 
 export default auth((request) => {
 
-  console.log('[PROXY] Middleware running for:', request.nextUrl.pathname)
   const { pathname } = request.nextUrl
   const isLoggedIn = !!request.auth
 
