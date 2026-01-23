@@ -10,13 +10,21 @@ import { getClients } from '@/app/actions/clients'
 import { getEmployees } from '@/app/actions/employees'
 import { formatCurrency } from '@/lib/utils'
 import { Plus, Trash2 } from 'lucide-react'
-import type { Job, Client, Employee, JobStatus } from '@prisma/client'
+import type { Job, Client, Employee, JobStatus, JobEmployee, JobLineItem as PrismaJobLineItem } from '@prisma/client'
 
 interface JobLineItem {
   id?: string
   description: string
   amount: number
   notes?: string
+}
+
+type JobWithRelations = Job & {
+  employees?: Array<{
+    employee: Employee
+    employeeId: string
+  }>
+  lineItems?: PrismaJobLineItem[]
 }
 
 interface JobFormData {
@@ -31,7 +39,7 @@ interface JobFormData {
 }
 
 interface JobFormProps {
-  job?: Job | null
+  job?: JobWithRelations | null
   onSuccess?: () => void
   onCancel?: () => void
 }
@@ -56,7 +64,7 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
           clientId: job.clientId,
           jobDescription: job.jobDescription,
           dateWorkCommenced: job.dateWorkCommenced.toISOString().split('T')[0],
-          employeeIds: job.employees?.map(je => je.employeeId) || [],
+          employeeIds: job.employees?.map(je => je.employee.id) || [],
           lineItems: job.lineItems?.map(li => ({
             id: li.id,
             description: li.description,
