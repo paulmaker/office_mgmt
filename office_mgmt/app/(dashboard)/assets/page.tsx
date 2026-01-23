@@ -220,74 +220,75 @@ export default function AssetsPage() {
                 </TableRow>
               ) : (
                 vehicles.map((vehicle) => {
-                const motDays = getDaysUntil(vehicle.motDueDate)
-                const taxDays = getDaysUntil(vehicle.taxDueDate)
-                const insuranceDays = getDaysUntil(vehicle.insuranceDueDate)
-                const serviceDays = getDaysUntil(vehicle.serviceDueDate)
+                  const motDays = getDaysUntil(vehicle.motDueDate)
+                  const taxDays = getDaysUntil(vehicle.taxDueDate)
+                  const insuranceDays = getDaysUntil(vehicle.insuranceDueDate)
+                  const serviceDays = getDaysUntil(vehicle.serviceDueDate)
 
-                return (
-                  <TableRow key={vehicle.id}>
-                    <TableCell className="font-medium">{vehicle.name}</TableCell>
-                    <TableCell className="font-mono">{vehicle.registrationNumber}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-sm">{vehicle.motDueDate ? formatDate(vehicle.motDueDate) : '-'}</span>
-                        {motDays !== null && getStatusBadge(motDays)}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-sm">{vehicle.taxDueDate ? formatDate(vehicle.taxDueDate) : '-'}</span>
-                        {taxDays !== null && getStatusBadge(taxDays)}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-sm">{vehicle.insuranceDueDate ? formatDate(vehicle.insuranceDueDate) : '-'}</span>
-                        {insuranceDays !== null && getStatusBadge(insuranceDays)}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-sm">{vehicle.serviceDueDate ? formatDate(vehicle.serviceDueDate) : '-'}</span>
-                        {serviceDays !== null && getStatusBadge(serviceDays)}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {vehicle.leaseExpiryDate ? (
+                  return (
+                    <TableRow key={vehicle.id}>
+                      <TableCell className="font-medium">{vehicle.name}</TableCell>
+                      <TableCell className="font-mono">{vehicle.registrationNumber}</TableCell>
+                      <TableCell>
                         <div className="flex flex-col gap-1">
-                          <span className="text-sm">{formatDate(vehicle.leaseExpiryDate)}</span>
-                          {getDaysUntil(vehicle.leaseExpiryDate) !== null && 
-                            getStatusBadge(getDaysUntil(vehicle.leaseExpiryDate))}
+                          <span className="text-sm">{vehicle.motDueDate ? formatDate(vehicle.motDueDate) : '-'}</span>
+                          {motDays !== null && getStatusBadge(motDays)}
                         </div>
-                      ) : (
-                        <span className="text-sm text-gray-400">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {vehicle.companyCar ? (
-                        <CheckCircle className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <span className="text-gray-400 text-sm">No</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {vehicle.merseyFlow ? (
-                        <CheckCircle className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <span className="text-gray-400 text-sm">No</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {vehicle.remindersEnabled ? (
-                        <CheckCircle className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <span className="text-gray-400 text-sm">Disabled</span>
-                      )}
-                    </TableCell>
-                  </TableRow>
-                )
-              ))}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm">{vehicle.taxDueDate ? formatDate(vehicle.taxDueDate) : '-'}</span>
+                          {taxDays !== null && getStatusBadge(taxDays)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm">{vehicle.insuranceDueDate ? formatDate(vehicle.insuranceDueDate) : '-'}</span>
+                          {insuranceDays !== null && getStatusBadge(insuranceDays)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm">{vehicle.serviceDueDate ? formatDate(vehicle.serviceDueDate) : '-'}</span>
+                          {serviceDays !== null && getStatusBadge(serviceDays)}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {vehicle.leaseExpiryDate ? (
+                          <div className="flex flex-col gap-1">
+                            <span className="text-sm">{formatDate(vehicle.leaseExpiryDate)}</span>
+                            {getDaysUntil(vehicle.leaseExpiryDate) !== null && 
+                              getStatusBadge(getDaysUntil(vehicle.leaseExpiryDate))}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {vehicle.companyCar ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <span className="text-gray-400 text-sm">No</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {vehicle.merseyFlow ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <span className="text-gray-400 text-sm">No</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {vehicle.remindersEnabled ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <span className="text-gray-400 text-sm">Disabled</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              )}
             </TableBody>
           </Table>
         </CardContent>
