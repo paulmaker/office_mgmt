@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -12,33 +12,122 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { mockBankTransactions, mockInvoices } from '@/lib/mock-data'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { getBankTransactions, deleteBankTransaction, unreconcileTransaction } from '@/app/actions/bank-transactions'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Upload, Download, Check, X, ArrowDownIcon, ArrowUpIcon } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
+import { Upload, Download, Check, X, ArrowDownIcon, ArrowUpIcon, Edit, Trash2, FileText } from 'lucide-react'
+import { CSVImportDialog } from '@/components/banking/csv-import-dialog'
+import { ReconcileDialog } from '@/components/banking/reconcile-dialog'
+import type { BankTransaction } from '@prisma/client'
+
+type BankTransactionWithRelations = BankTransaction & {
+  invoice?: {
+    id: string
+    invoiceNumber: string
+    client?: {
+      name: string
+      companyName: string | null
+    } | null
+  } | null
+}
 
 export default function BankingPage() {
+  const [transactions, setTransactions] = useState<BankTransactionWithRelations[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'reconciled' | 'unreconciled'>('all')
+  const [csvImportOpen, setCsvImportOpen] = useState(false)
+  const [reconcileDialogOpen, setReconcileDialogOpen] = useState(false)
+  const [selectedTransaction, setSelectedTransaction] = useState<BankTransaction | null>(null)
+  const [deletingTransactionId, setDeletingTransactionId] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const { toast } = useToast()
 
-  const filteredTransactions = mockBankTransactions.filter(txn => {
-    if (filter === 'reconciled') return txn.reconciled
-    if (filter === 'unreconciled') return !txn.reconciled
-    return true
-  })
+  useEffect(() => {
+    loadTransactions()
+  }, [filter])
 
-  const getInvoiceNumber = (txn: typeof mockBankTransactions[0]) => {
-    if (txn.invoiceId) {
-      const invoice = mockInvoices.find(inv => inv.id === txn.invoiceId)
-      return invoice?.invoiceNumber
+  const loadTransactions = async () => {
+    try {
+      setIsLoading(true)
+      const filters: any = {}
+      if (filter === 'reconciled') {
+        filters.reconciled = true
+      } else if (filter === 'unreconciled') {
+        filters.reconciled = false
+      }
+      const data = await getBankTransactions(filters)
+      setTransactions(data as BankTransactionWithRelations[])
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to load transactions',
+      })
+    } finally {
+      setIsLoading(false)
     }
-    return null
+  }
+
+  const handleReconcile = (transaction: BankTransaction) => {
+    setSelectedTransaction(transaction)
+    setReconcileDialogOpen(true)
+  }
+
+  const handleUnreconcile = async (id: string) => {
+    try {
+      await unreconcileTransaction(id)
+      await loadTransactions()
+      toast({
+        variant: 'success',
+        title: 'Transaction unreconciled',
+        description: 'Transaction has been unreconciled.',
+      })
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to unreconcile transaction',
+      })
+    }
+  }
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteBankTransaction(id)
+      await loadTransactions()
+      toast({
+        variant: 'success',
+        title: 'Transaction deleted',
+        description: 'Transaction has been successfully deleted.',
+      })
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete transaction',
+      })
+    } finally {
+      setDeleteDialogOpen(false)
+      setDeletingTransactionId(null)
+    }
   }
 
   const stats = {
-    totalIn: mockBankTransactions.filter(t => t.type === 'CREDIT').reduce((sum, t) => sum + t.amount, 0),
-    totalOut: mockBankTransactions.filter(t => t.type === 'DEBIT').reduce((sum, t) => sum + Math.abs(t.amount), 0),
-    reconciled: mockBankTransactions.filter(t => t.reconciled).length,
-    unreconciled: mockBankTransactions.filter(t => !t.reconciled).length,
-    balance: mockBankTransactions.reduce((sum, t) => sum + t.amount, 0),
+    totalIn: transactions.filter(t => t.type === 'CREDIT').reduce((sum, t) => sum + t.amount, 0),
+    totalOut: transactions.filter(t => t.type === 'DEBIT').reduce((sum, t) => sum + Math.abs(t.amount), 0),
+    reconciled: transactions.filter(t => t.reconciled).length,
+    unreconciled: transactions.filter(t => !t.reconciled).length,
+    balance: transactions.reduce((sum, t) => sum + (t.type === 'CREDIT' ? t.amount : -Math.abs(t.amount)), 0),
   }
 
   return (
@@ -51,11 +140,11 @@ export default function BankingPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline">
+          <Button variant="outline" onClick={() => setCsvImportOpen(true)}>
             <Upload className="h-4 w-4 mr-2" />
             Import CSV
           </Button>
-          <Button>
+          <Button variant="outline">
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
@@ -136,7 +225,7 @@ export default function BankingPage() {
         <CardHeader>
           <CardTitle>Bank Transactions</CardTitle>
           <CardDescription>
-            {filteredTransactions.length} transaction{filteredTransactions.length !== 1 ? 's' : ''}
+            {transactions.length} transaction{transactions.length !== 1 ? 's' : ''}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -153,55 +242,169 @@ export default function BankingPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredTransactions.map((txn) => (
-                <TableRow key={txn.id}>
-                  <TableCell className="text-gray-500">{formatDate(txn.date)}</TableCell>
-                  <TableCell className="font-medium">{txn.description}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className="text-xs">
-                      {txn.category || 'Uncategorized'}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {getInvoiceNumber(txn) ? (
-                      <span className="text-sm font-mono text-blue-600">
-                        {getInvoiceNumber(txn)}
-                      </span>
-                    ) : (
-                      <span className="text-sm text-gray-400">-</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <span className={txn.type === 'CREDIT' ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
-                      {txn.type === 'CREDIT' ? '+' : ''}{formatCurrency(txn.amount)}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    {txn.reconciled ? (
-                      <Badge variant="success">
-                        <Check className="h-3 w-3 mr-1" />
-                        Reconciled
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary">
-                        <X className="h-3 w-3 mr-1" />
-                        Pending
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {!txn.reconciled && (
-                      <Button variant="ghost" size="sm">
-                        Match
-                      </Button>
-                    )}
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8">
+                    Loading transactions...
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : transactions.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8 text-gray-500">
+                    No transactions found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                transactions.map((txn) => (
+                  <TableRow key={txn.id}>
+                    <TableCell className="text-gray-500">{formatDate(txn.date)}</TableCell>
+                    <TableCell className="font-medium">{txn.description}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary" className="text-xs">
+                        {txn.category || 'Uncategorized'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {txn.invoice ? (
+                        <div className="flex flex-col">
+                          <span className="text-sm font-mono text-blue-600">
+                            {txn.invoice.invoiceNumber}
+                          </span>
+                          {txn.invoice.client && (
+                            <span className="text-xs text-gray-500">
+                              {txn.invoice.client.companyName || txn.invoice.client.name}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <span className={txn.type === 'CREDIT' ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>
+                        {txn.type === 'CREDIT' ? '+' : '-'}{formatCurrency(Math.abs(txn.amount))}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      {txn.reconciled ? (
+                        <Badge variant="success">
+                          <Check className="h-3 w-3 mr-1" />
+                          Reconciled
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary">
+                          <X className="h-3 w-3 mr-1" />
+                          Pending
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        {!txn.reconciled ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleReconcile(txn)}
+                          >
+                            Match
+                          </Button>
+                        ) : (
+                          <>
+                            {txn.documentUrl && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  if (txn.documentUrl) {
+                                    window.open(txn.documentUrl, '_blank')
+                                  }
+                                }}
+                              >
+                                <FileText className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleReconcile(txn)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleUnreconcile(txn.id)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                        {!txn.reconciled && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setDeletingTransactionId(txn.id)
+                              setDeleteDialogOpen(true)
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      {/* CSV Import Dialog */}
+      <CSVImportDialog
+        open={csvImportOpen}
+        onOpenChange={setCsvImportOpen}
+        onSuccess={loadTransactions}
+      />
+
+      {/* Reconcile Dialog */}
+      <ReconcileDialog
+        open={reconcileDialogOpen}
+        onOpenChange={setReconcileDialogOpen}
+        transaction={selectedTransaction}
+        onSuccess={() => {
+          loadTransactions()
+          setSelectedTransaction(null)
+        }}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the bank transaction.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeletingTransactionId(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deletingTransactionId) {
+                  handleDelete(deletingTransactionId)
+                }
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
