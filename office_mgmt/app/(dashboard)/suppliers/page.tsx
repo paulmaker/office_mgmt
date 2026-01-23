@@ -29,38 +29,38 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { ClientForm } from '@/components/clients/client-form'
-import { getClients, deleteClient } from '@/app/actions/clients'
+import { SupplierForm } from '@/components/suppliers/supplier-form'
+import { getSuppliers, deleteSupplier } from '@/app/actions/suppliers'
 import { formatDate } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { Plus, Search, Edit, Mail, Phone, MapPin, Trash2 } from 'lucide-react'
-import type { Client } from '@prisma/client'
+import type { Supplier } from '@prisma/client'
 
-export default function ClientsPage() {
+export default function SuppliersPage() {
   const [searchTerm, setSearchTerm] = useState('')
-  const [clients, setClients] = useState<Client[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingClient, setEditingClient] = useState<Client | null>(null)
-  const [deletingClientId, setDeletingClientId] = useState<string | null>(null)
+  const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null)
+  const [deletingSupplierId, setDeletingSupplierId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [clientToDelete, setClientToDelete] = useState<Client | null>(null)
+  const [supplierToDelete, setSupplierToDelete] = useState<Supplier | null>(null)
   const { toast } = useToast()
 
   useEffect(() => {
-    loadClients()
+    loadSuppliers()
   }, [])
 
-  const loadClients = async () => {
+  const loadSuppliers = async () => {
     try {
       setIsLoading(true)
-      const data = await getClients()
-      setClients(data)
+      const data = await getSuppliers()
+      setSuppliers(data)
     } catch (error) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to load clients',
+        description: error instanceof Error ? error.message : 'Failed to load suppliers',
       })
     } finally {
       setIsLoading(false)
@@ -68,84 +68,83 @@ export default function ClientsPage() {
   }
 
   const handleCreateClick = () => {
-    setEditingClient(null)
+    setEditingSupplier(null)
     setIsDialogOpen(true)
   }
 
-  const handleEditClick = (client: Client) => {
-    setEditingClient(client)
+  const handleEditClick = (supplier: Supplier) => {
+    setEditingSupplier(supplier)
     setIsDialogOpen(true)
   }
 
-  const handleDeleteClick = (client: Client) => {
-    setClientToDelete(client)
+  const handleDeleteClick = (supplier: Supplier) => {
+    setSupplierToDelete(supplier)
     setDeleteDialogOpen(true)
   }
 
   const confirmDelete = async () => {
-    if (!clientToDelete) return
+    if (!supplierToDelete) return
 
     try {
-      setDeletingClientId(clientToDelete.id)
-      await deleteClient(clientToDelete.id)
-      await loadClients()
+      setDeletingSupplierId(supplierToDelete.id)
+      await deleteSupplier(supplierToDelete.id)
+      await loadSuppliers()
       toast({
         variant: 'success',
-        title: 'Client deleted',
-        description: `${clientToDelete.name} has been successfully deleted.`,
+        title: 'Supplier deleted',
+        description: `${supplierToDelete.name} has been successfully deleted.`,
       })
       setDeleteDialogOpen(false)
-      setClientToDelete(null)
+      setSupplierToDelete(null)
     } catch (error) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to delete client',
+        description: error instanceof Error ? error.message : 'Failed to delete supplier',
       })
     } finally {
-      setDeletingClientId(null)
+      setDeletingSupplierId(null)
     }
   }
 
   const handleFormSuccess = () => {
     setIsDialogOpen(false)
-    const action = editingClient ? 'updated' : 'created'
+    const action = editingSupplier ? 'updated' : 'created'
     toast({
       variant: 'success',
-      title: `Client ${action}`,
-      description: `Client has been successfully ${action}.`,
+      title: `Supplier ${action}`,
+      description: `Supplier has been successfully ${action}.`,
     })
-    setEditingClient(null)
-    loadClients()
+    setEditingSupplier(null)
+    loadSuppliers()
   }
 
-  const filteredClients = clients.filter(client =>
-    client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.referenceCode?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredSuppliers = suppliers.filter(supplier =>
+    supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    supplier.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    supplier.email?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Suppliers</h1>
           <p className="text-gray-500 mt-1">
-            Manage your client database and view account details
+            Manage your suppliers and vendor information
           </p>
         </div>
         <Button onClick={handleCreateClick}>
           <Plus className="h-4 w-4 mr-2" />
-          Add Client
+          Add Supplier
         </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>All Clients</CardTitle>
+          <CardTitle>All Suppliers</CardTitle>
           <CardDescription>
-            {filteredClients.length} client{filteredClients.length !== 1 ? 's' : ''} found
+            {filteredSuppliers.length} supplier{filteredSuppliers.length !== 1 ? 's' : ''} found
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -153,7 +152,7 @@ export default function ClientsPage() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Input
-                placeholder="Search clients..."
+                placeholder="Search suppliers..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -164,8 +163,7 @@ export default function ClientsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Client Name</TableHead>
-                <TableHead>Reference Code</TableHead>
+                <TableHead>Supplier Name</TableHead>
                 <TableHead>Company</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Address</TableHead>
@@ -178,85 +176,76 @@ export default function ClientsPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
-                    <p className="text-gray-500">Loading clients...</p>
+                  <TableCell colSpan={8} className="text-center py-8">
+                    <p className="text-gray-500">Loading suppliers...</p>
                   </TableCell>
                 </TableRow>
-              ) : filteredClients.length === 0 ? (
+              ) : filteredSuppliers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
-                    <p className="text-gray-500">No clients found</p>
+                  <TableCell colSpan={8} className="text-center py-8">
+                    <p className="text-gray-500">No suppliers found</p>
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredClients.map((client) => (
-                  <TableRow key={client.id}>
-                    <TableCell className="font-medium">{client.name}</TableCell>
-                    <TableCell>
-                      {client.referenceCode ? (
-                        <Badge variant="secondary" className="font-mono">
-                          {client.referenceCode}
-                        </Badge>
-                      ) : (
-                        <span className="text-sm text-gray-400">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>{client.companyName || '-'}</TableCell>
+                filteredSuppliers.map((supplier) => (
+                  <TableRow key={supplier.id}>
+                    <TableCell className="font-medium">{supplier.name}</TableCell>
+                    <TableCell>{supplier.companyName || '-'}</TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-1 text-sm">
-                          <Mail className="h-3 w-3 text-gray-400" />
-                          <span className="text-gray-600">{client.email}</span>
-                        </div>
-                        {client.phone && (
+                        {supplier.email && (
                           <div className="flex items-center gap-1 text-sm">
-                            <Phone className="h-3 w-3 text-gray-400" />
-                            <span className="text-gray-600">{client.phone}</span>
+                            <Mail className="h-3 w-3 text-gray-400" />
+                            <span className="text-gray-600">{supplier.email}</span>
                           </div>
                         )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {client.address ? (
-                        <div className="flex items-center gap-1 text-sm">
-                          <MapPin className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                          <span className="text-gray-600">{client.address}</span>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-400">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        {client.vatRegistered && (
-                          <Badge variant="secondary" className="text-xs">VAT</Badge>
+                        {supplier.phone && (
+                          <div className="flex items-center gap-1 text-sm">
+                            <Phone className="h-3 w-3 text-gray-400" />
+                            <span className="text-gray-600">{supplier.phone}</span>
+                          </div>
                         )}
-                        {client.cisRegistered && (
-                          <Badge variant="secondary" className="text-xs">CIS</Badge>
-                        )}
-                        {!client.vatRegistered && !client.cisRegistered && (
+                        {!supplier.email && !supplier.phone && (
                           <span className="text-sm text-gray-400">-</span>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>{client.paymentTerms} days</TableCell>
+                    <TableCell>
+                      {supplier.address ? (
+                        <div className="flex items-center gap-1 text-sm">
+                          <MapPin className="h-3 w-3 text-gray-400 flex-shrink-0" />
+                          <span className="text-gray-600">{supplier.address}</span>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {supplier.vatRegistered && (
+                        <Badge variant="secondary" className="text-xs">VAT</Badge>
+                      )}
+                      {!supplier.vatRegistered && (
+                        <span className="text-sm text-gray-400">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>{supplier.paymentTerms} days</TableCell>
                     <TableCell className="text-gray-500">
-                      {formatDate(client.createdAt)}
+                      {formatDate(supplier.createdAt)}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleEditClick(client)}
+                          onClick={() => handleEditClick(supplier)}
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDeleteClick(client)}
-                          disabled={deletingClientId === client.id}
+                          onClick={() => handleDeleteClick(supplier)}
+                          disabled={deletingSupplierId === supplier.id}
                         >
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
@@ -267,7 +256,6 @@ export default function ClientsPage() {
               )}
             </TableBody>
           </Table>
-
         </CardContent>
       </Card>
 
@@ -276,11 +264,11 @@ export default function ClientsPage() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editingClient ? 'Edit Client' : 'Create New Client'}
+              {editingSupplier ? 'Edit Supplier' : 'Create New Supplier'}
             </DialogTitle>
           </DialogHeader>
-          <ClientForm
-            client={editingClient}
+          <SupplierForm
+            supplier={editingSupplier}
             onSuccess={handleFormSuccess}
             onCancel={() => setIsDialogOpen(false)}
           />
@@ -294,18 +282,18 @@ export default function ClientsPage() {
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete{' '}
-              <strong>{clientToDelete?.name}</strong> and all associated data.
+              <strong>{supplierToDelete?.name}</strong> and all associated data.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setClientToDelete(null)}>
+            <AlertDialogCancel onClick={() => setSupplierToDelete(null)}>
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
               className="bg-red-600 hover:bg-red-700"
             >
-              {deletingClientId ? 'Deleting...' : 'Delete'}
+              {deletingSupplierId ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -315,11 +303,11 @@ export default function ClientsPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Total Clients</CardDescription>
-            <CardTitle className="text-3xl">{clients.length}</CardTitle>
+            <CardDescription>Total Suppliers</CardDescription>
+            <CardTitle className="text-3xl">{suppliers.length}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-gray-500">Active client accounts</p>
+            <p className="text-xs text-gray-500">Active supplier accounts</p>
           </CardContent>
         </Card>
 
@@ -327,23 +315,29 @@ export default function ClientsPage() {
           <CardHeader className="pb-2">
             <CardDescription>VAT Registered</CardDescription>
             <CardTitle className="text-3xl">
-              {clients.filter(c => c.vatRegistered).length}
+              {suppliers.filter(s => s.vatRegistered).length}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-gray-500">Clients registered for VAT</p>
+            <p className="text-xs text-gray-500">Suppliers registered for VAT</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>CIS Registered</CardDescription>
+            <CardDescription>Average Payment Terms</CardDescription>
             <CardTitle className="text-3xl">
-              {clients.filter(c => c.cisRegistered).length}
+              {suppliers.length > 0
+                ? Math.round(
+                    suppliers.reduce((sum, s) => sum + s.paymentTerms, 0) /
+                      suppliers.length
+                  )
+                : 0}{' '}
+              days
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-gray-500">CIS scheme contractors</p>
+            <p className="text-xs text-gray-500">Average payment terms</p>
           </CardContent>
         </Card>
       </div>

@@ -84,3 +84,69 @@ export function getJobStatusColor(status: string): string {
   }
   return colors[status] || 'text-gray-500 bg-gray-100'
 }
+
+/**
+ * Generate a reference code from a name
+ * Takes first letters of words (prefer company name, fallback to name)
+ * Example: "Luxury Homes" -> "LU", "ABC Company" -> "ABC", "John Smith" -> "JS"
+ */
+export function generateReferenceCode(name: string, companyName?: string | null): string {
+  const source = (companyName || name).trim()
+  
+  if (!source) {
+    return 'CL'
+  }
+  
+  // Split into words and filter out common words
+  const words = source.split(/\s+/).filter(word => {
+    const lower = word.toLowerCase()
+    // Filter out common words that don't add value
+    return !['the', 'and', 'of', 'for', 'ltd', 'limited', 'llc', 'inc', 'incorporated'].includes(lower)
+  })
+  
+  // If we have words, take first letter of each (up to 3 words)
+  if (words.length >= 1) {
+    const code = words
+      .slice(0, 3) // Take up to 3 words
+      .map(word => {
+        // Get first uppercase letter, or first letter if no uppercase
+        const upperMatch = word.match(/[A-Z]/)
+        if (upperMatch) {
+          return upperMatch[0]
+        }
+        // Fallback to first character, uppercase
+        return word.charAt(0).toUpperCase()
+      })
+      .join('')
+    
+    // Ensure we have at least 2 characters
+    if (code.length >= 2) {
+      return code.substring(0, 3) // Max 3 characters
+    }
+    
+    // If only 1 character, pad with second letter of first word or second word
+    if (code.length === 1 && words.length > 0) {
+      const firstWord = words[0]
+      if (firstWord.length > 1) {
+        return code + firstWord.charAt(1).toUpperCase()
+      }
+      if (words.length > 1) {
+        return code + words[1].charAt(0).toUpperCase()
+      }
+    }
+  }
+  
+  // Fallback: take first 2-3 uppercase letters from the source
+  const upperLetters = source.match(/[A-Z]/g)
+  if (upperLetters && upperLetters.length >= 2) {
+    return upperLetters.slice(0, 3).join('')
+  }
+  
+  // Final fallback: first 2 characters, uppercase
+  const cleaned = source.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
+  if (cleaned.length >= 2) {
+    return cleaned.substring(0, 2)
+  }
+  
+  return 'CL' // Ultimate fallback
+}

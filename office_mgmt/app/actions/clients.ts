@@ -5,6 +5,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
 import { getUserEntity, getAccessibleEntityIds } from '@/lib/platform-core/multi-tenancy'
 import { revalidatePath } from 'next/cache'
+import { generateReferenceCode } from '@/lib/utils'
 
 /**
  * Get all clients for the current user's accessible entities
@@ -94,6 +95,7 @@ export async function createClient(data: {
   vatRegistered?: boolean
   cisRegistered?: boolean
   paymentTerms?: number
+  referenceCode?: string
   ratesConfig?: any
   notes?: string
 }) {
@@ -116,6 +118,53 @@ export async function createClient(data: {
     throw new Error('User entity not found')
   }
 
+  // Auto-generate reference code if not provided
+  let referenceCode = data.referenceCode
+  if (!referenceCode) {
+    const baseCode = generateReferenceCode(data.name, data.companyName)
+    
+    // Always append a 6-digit number, starting from 000001
+    // Find the highest number for this base code in this entity
+    const existingCodes = await prisma.client.findMany({
+      where: {
+        entityId: userEntity.entityId,
+        referenceCode: {
+          startsWith: baseCode,
+        },
+      },
+      select: {
+        referenceCode: true,
+      },
+    })
+    
+    // Extract numbers from existing codes (e.g., "CC000001" -> 1, "CC000002" -> 2)
+    const numbers = existingCodes
+      .map(c => {
+        // Match base code followed by 6 digits
+        const match = c.referenceCode?.match(new RegExp(`^${baseCode}(\\d{6})$`))
+        return match ? parseInt(match[1], 10) : 0
+      })
+      .filter(n => n > 0)
+    
+    // Get next number (highest + 1, or 1 if none exist)
+    const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : 1
+    // Pad to 6 digits
+    const paddedNumber = nextNumber.toString().padStart(6, '0')
+    referenceCode = `${baseCode}${paddedNumber}`
+  } else {
+    // Check if provided reference code is unique
+    const existing = await prisma.client.findFirst({
+      where: {
+        entityId: userEntity.entityId,
+        referenceCode: data.referenceCode,
+      },
+    })
+    
+    if (existing) {
+      throw new Error('Reference code already exists for another client in this entity')
+    }
+  }
+
   // Create client scoped to user's entity
   const client = await prisma.client.create({
     data: {
@@ -130,6 +179,7 @@ export async function createClient(data: {
       vatRegistered: data.vatRegistered ?? false,
       cisRegistered: data.cisRegistered ?? false,
       paymentTerms: data.paymentTerms ?? 30,
+      referenceCode: referenceCode,
       ratesConfig: data.ratesConfig,
       notes: data.notes,
     },
@@ -155,6 +205,7 @@ export async function updateClient(
     vatRegistered?: boolean
     cisRegistered?: boolean
     paymentTerms?: number
+    referenceCode?: string
     ratesConfig?: any
     notes?: string
   }
@@ -187,6 +238,21 @@ export async function updateClient(
     throw new Error('You do not have permission to update this client')
   }
 
+  // Validate reference code uniqueness if being changed
+  if (data.referenceCode && data.referenceCode !== existingClient.referenceCode) {
+    const existing = await prisma.client.findFirst({
+      where: {
+        entityId: existingClient.entityId,
+        referenceCode: data.referenceCode,
+        id: { not: id },
+      },
+    })
+    
+    if (existing) {
+      throw new Error('Reference code already exists for another client in this entity')
+    }
+  }
+
   // Update client
   const client = await prisma.client.update({
     where: { id },
@@ -201,6 +267,7 @@ export async function updateClient(
       vatRegistered: data.vatRegistered,
       cisRegistered: data.cisRegistered,
       paymentTerms: data.paymentTerms,
+      referenceCode: data.referenceCode,
       ratesConfig: data.ratesConfig,
       notes: data.notes,
     },

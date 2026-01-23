@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,39 +13,178 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { mockTimesheets, mockSubcontractors } from '@/lib/mock-data'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { TimesheetForm } from '@/components/timesheets/timesheet-form'
+import { getTimesheets, deleteTimesheet, approveTimesheet, rejectTimesheet, getTimesheet } from '@/app/actions/timesheets'
 import { formatCurrency, formatDate, getTimesheetStatusColor } from '@/lib/utils'
-import { Plus, Search, Check, X, Download } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
+import { Plus, Search, Check, X, Download, Edit, Trash2, Receipt } from 'lucide-react'
+import type { Timesheet } from '@prisma/client'
+
+type TimesheetWithRelations = Timesheet & {
+  subcontractor: { name: string; cisStatus: string }
+}
 
 export default function TimesheetsPage() {
   const [searchTerm, setSearchTerm] = useState('')
+  const [timesheets, setTimesheets] = useState<TimesheetWithRelations[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingTimesheet, setEditingTimesheet] = useState<TimesheetWithRelations | null>(null)
+  const [deletingTimesheetId, setDeletingTimesheetId] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [timesheetToDelete, setTimesheetToDelete] = useState<TimesheetWithRelations | null>(null)
+  const { toast } = useToast()
 
-  const getSubcontractorName = (subcontractorId: string) => {
-    const sub = mockSubcontractors.find(s => s.id === subcontractorId)
-    return sub?.name || 'Unknown'
+  useEffect(() => {
+    loadTimesheets()
+  }, [])
+
+  const loadTimesheets = async () => {
+    try {
+      setIsLoading(true)
+      const data = await getTimesheets()
+      setTimesheets(data as TimesheetWithRelations[])
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to load timesheets',
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const getSubcontractorCISStatus = (subcontractorId: string) => {
-    const sub = mockSubcontractors.find(s => s.id === subcontractorId)
-    return sub?.cisStatus || 'NOT_VERIFIED'
+  const handleCreateClick = () => {
+    setEditingTimesheet(null)
+    setIsDialogOpen(true)
   }
 
-  const filteredTimesheets = mockTimesheets.filter(timesheet => {
-    const subName = getSubcontractorName(timesheet.subcontractorId)
+  const handleEditClick = async (timesheet: TimesheetWithRelations) => {
+    try {
+      const fullTimesheet = await getTimesheet(timesheet.id)
+      setEditingTimesheet(fullTimesheet as TimesheetWithRelations)
+      setIsDialogOpen(true)
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to load timesheet details',
+      })
+    }
+  }
+
+  const handleDeleteClick = (timesheet: TimesheetWithRelations) => {
+    setTimesheetToDelete(timesheet)
+    setDeleteDialogOpen(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!timesheetToDelete) return
+
+    try {
+      setDeletingTimesheetId(timesheetToDelete.id)
+      await deleteTimesheet(timesheetToDelete.id)
+      await loadTimesheets()
+      toast({
+        variant: 'success',
+        title: 'Timesheet deleted',
+        description: 'Timesheet has been successfully deleted.',
+      })
+      setDeleteDialogOpen(false)
+      setTimesheetToDelete(null)
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete timesheet',
+      })
+    } finally {
+      setDeletingTimesheetId(null)
+    }
+  }
+
+  const handleApprove = async (id: string) => {
+    try {
+      await approveTimesheet(id)
+      await loadTimesheets()
+      toast({
+        variant: 'success',
+        title: 'Timesheet approved',
+        description: 'Timesheet has been approved and is ready for processing.',
+      })
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to approve timesheet',
+      })
+    }
+  }
+
+  const handleReject = async (id: string) => {
+    try {
+      await rejectTimesheet(id, 'Rejected by user')
+      await loadTimesheets()
+      toast({
+        variant: 'success',
+        title: 'Timesheet rejected',
+        description: 'Timesheet has been rejected.',
+      })
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to reject timesheet',
+      })
+    }
+  }
+
+  const handleFormSuccess = () => {
+    setIsDialogOpen(false)
+    const action = editingTimesheet ? 'updated' : 'created'
+    toast({
+      variant: 'success',
+      title: `Timesheet ${action}`,
+      description: `Timesheet has been successfully ${action}.`,
+    })
+    setEditingTimesheet(null)
+    loadTimesheets()
+  }
+
+  const filteredTimesheets = timesheets.filter(timesheet => {
+    const subName = timesheet.subcontractor?.name.toLowerCase() || ''
     return (
-      subName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      subName.includes(searchTerm.toLowerCase()) ||
       timesheet.notes?.toLowerCase().includes(searchTerm.toLowerCase())
     )
   })
 
   const stats = {
-    total: mockTimesheets.length,
-    submitted: mockTimesheets.filter(t => t.status === 'SUBMITTED').length,
-    approved: mockTimesheets.filter(t => t.status === 'APPROVED').length,
-    processed: mockTimesheets.filter(t => t.status === 'PROCESSED').length,
-    paid: mockTimesheets.filter(t => t.status === 'PAID').length,
-    totalValue: mockTimesheets.reduce((sum, t) => sum + t.netAmount, 0),
-    totalCIS: mockTimesheets.reduce((sum, t) => sum + t.cisDeduction, 0),
+    total: timesheets.length,
+    submitted: timesheets.filter(t => t.status === 'SUBMITTED').length,
+    approved: timesheets.filter(t => t.status === 'APPROVED').length,
+    processed: timesheets.filter(t => t.status === 'PROCESSED').length,
+    paid: timesheets.filter(t => t.status === 'PAID').length,
+    totalValue: timesheets.reduce((sum, t) => sum + t.netAmount, 0),
+    totalCIS: timesheets.reduce((sum, t) => sum + t.cisDeduction, 0),
+    totalExpenses: timesheets.reduce((sum, t) => sum + (t.expenses || 0), 0),
   }
 
   return (
@@ -57,7 +196,7 @@ export default function TimesheetsPage() {
             Review and approve subcontractor timesheets
           </p>
         </div>
-        <Button>
+        <Button onClick={handleCreateClick}>
           <Plus className="h-4 w-4 mr-2" />
           Add Timesheet
         </Button>
@@ -131,83 +270,176 @@ export default function TimesheetsPage() {
               <TableRow>
                 <TableHead>Subcontractor</TableHead>
                 <TableHead>Period</TableHead>
+                <TableHead>Submitted</TableHead>
                 <TableHead>Hours</TableHead>
                 <TableHead>Rate</TableHead>
                 <TableHead>Gross</TableHead>
+                <TableHead>Expenses</TableHead>
                 <TableHead>CIS</TableHead>
                 <TableHead>Net Pay</TableHead>
+                <TableHead>Receipts</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredTimesheets.map((timesheet) => {
-                const cisStatus = getSubcontractorCISStatus(timesheet.subcontractorId)
-                return (
-                  <TableRow key={timesheet.id}>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-medium">{getSubcontractorName(timesheet.subcontractorId)}</span>
-                        <span className="text-xs text-gray-500">{cisStatus.replace('_', ' ')}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-gray-500">
-                      <div className="flex flex-col text-sm">
-                        <span>{formatDate(timesheet.periodStart)}</span>
-                        <span className="text-xs text-gray-400">to {formatDate(timesheet.periodEnd)}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>{timesheet.hoursWorked}h</TableCell>
-                    <TableCell>{formatCurrency(timesheet.rate)}/h</TableCell>
-                    <TableCell className="font-medium">{formatCurrency(timesheet.grossAmount)}</TableCell>
-                    <TableCell className="text-red-600">
-                      {timesheet.cisDeduction > 0 ? `-${formatCurrency(timesheet.cisDeduction)}` : '-'}
-                    </TableCell>
-                    <TableCell className="font-medium text-green-600">
-                      {formatCurrency(timesheet.netAmount)}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant={
-                          timesheet.status === 'PAID' ? 'success' :
-                          timesheet.status === 'APPROVED' ? 'default' :
-                          timesheet.status === 'REJECTED' ? 'destructive' :
-                          'secondary'
-                        }
-                      >
-                        {timesheet.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        {timesheet.status === 'SUBMITTED' && (
-                          <>
-                            <Button variant="ghost" size="sm" className="text-green-600 hover:text-green-700">
-                              <Check className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700">
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={12} className="text-center py-8">
+                    <p className="text-gray-500">Loading timesheets...</p>
+                  </TableCell>
+                </TableRow>
+              ) : filteredTimesheets.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={12} className="text-center py-8">
+                    <p className="text-gray-500">No timesheets found</p>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredTimesheets.map((timesheet) => {
+                  const cisStatus = timesheet.subcontractor?.cisStatus || 'NOT_VERIFIED'
+                  return (
+                    <TableRow key={timesheet.id}>
+                      <TableCell>
+                        <div className="flex flex-col">
+                          <span className="font-medium">{timesheet.subcontractor?.name}</span>
+                          <span className="text-xs text-gray-500">{cisStatus.replace('_', ' ')}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-gray-500">
+                        <div className="flex flex-col text-sm">
+                          <span>{formatDate(timesheet.periodStart)}</span>
+                          <span className="text-xs text-gray-400">to {formatDate(timesheet.periodEnd)}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-gray-500">
+                        {timesheet.submittedDate ? formatDate(timesheet.submittedDate) : '-'}
+                      </TableCell>
+                      <TableCell>{timesheet.hoursWorked}h</TableCell>
+                      <TableCell>{formatCurrency(timesheet.rate)}/h</TableCell>
+                      <TableCell className="font-medium">{formatCurrency(timesheet.grossAmount)}</TableCell>
+                      <TableCell>
+                        {timesheet.expenses > 0 ? (
+                          <span className="text-sm text-blue-600">+{formatCurrency(timesheet.expenses)}</span>
+                        ) : (
+                          <span className="text-sm text-gray-400">-</span>
                         )}
-                        <Button variant="ghost" size="sm">
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
+                      </TableCell>
+                      <TableCell className="text-red-600">
+                        {timesheet.cisDeduction > 0 ? `-${formatCurrency(timesheet.cisDeduction)}` : '-'}
+                      </TableCell>
+                      <TableCell className="font-medium text-green-600">
+                        {formatCurrency(timesheet.netAmount)}
+                      </TableCell>
+                      <TableCell>
+                        {timesheet.receiptsReceived ? (
+                          <div className="flex items-center gap-1 text-green-600">
+                            <Receipt className="h-4 w-4" />
+                            <span className="text-sm">Yes</span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">No</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={getTimesheetStatusColor(timesheet.status)}
+                        >
+                          {timesheet.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          {timesheet.status === 'SUBMITTED' && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-green-600 hover:text-green-700"
+                                onClick={() => handleApprove(timesheet.id)}
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-600 hover:text-red-700"
+                                onClick={() => handleReject(timesheet.id)}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditClick(timesheet)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          {timesheet.status !== 'PROCESSED' && timesheet.status !== 'PAID' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteClick(timesheet)}
+                              disabled={deletingTimesheetId === timesheet.id}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="sm">
+                            <Download className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              )}
             </TableBody>
           </Table>
-
-          {filteredTimesheets.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-gray-500">No timesheets found</p>
-            </div>
-          )}
         </CardContent>
       </Card>
+
+      {/* Create/Edit Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingTimesheet ? 'Edit Timesheet' : 'Create New Timesheet'}
+            </DialogTitle>
+          </DialogHeader>
+          <TimesheetForm
+            timesheet={editingTimesheet as any}
+            onSuccess={handleFormSuccess}
+            onCancel={() => setIsDialogOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete this timesheet and all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setTimesheetToDelete(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deletingTimesheetId ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

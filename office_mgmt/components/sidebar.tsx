@@ -19,13 +19,19 @@ import {
   Shield,
   LogOut,
   Briefcase,
+  UserCheck,
+  Package,
+  DollarSign,
 } from 'lucide-react'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Clients', href: '/clients', icon: Users },
   { name: 'Subcontractors', href: '/subcontractors', icon: Briefcase },
+  { name: 'Employees', href: '/employees', icon: UserCheck },
+  { name: 'Suppliers', href: '/suppliers', icon: Package },
   { name: 'Jobs', href: '/jobs', icon: ClipboardList },
+  { name: 'Job Prices', href: '/job-prices', icon: DollarSign },
   { name: 'Invoices', href: '/invoices', icon: FileText },
   { name: 'Timesheets', href: '/timesheets', icon: Clock },
   { name: 'CIS Payroll', href: '/payroll', icon: Banknote },

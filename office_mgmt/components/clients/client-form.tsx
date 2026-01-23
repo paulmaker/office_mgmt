@@ -19,6 +19,7 @@ interface ClientFormData {
   vatRegistered: boolean
   cisRegistered: boolean
   paymentTerms: number
+  referenceCode?: string
   notes?: string
 }
 
@@ -49,6 +50,7 @@ export function ClientForm({ client, onSuccess, onCancel }: ClientFormProps) {
           vatRegistered: client.vatRegistered,
           cisRegistered: client.cisRegistered,
           paymentTerms: client.paymentTerms,
+          referenceCode: client.referenceCode || '',
           notes: client.notes || '',
         }
       : {
@@ -143,10 +145,33 @@ export function ClientForm({ client, onSuccess, onCancel }: ClientFormProps) {
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
+              <Label htmlFor="referenceCode">Reference Code</Label>
+              <Input
+                id="referenceCode"
+                {...register('referenceCode', {
+                  pattern: {
+                    value: /^[A-Z0-9]{1,5}$/,
+                    message: 'Reference code must be 1-5 uppercase letters/numbers',
+                  },
+                })}
+                placeholder="Auto-generated if left empty"
+                className="uppercase"
+              />
+              {errors.referenceCode && (
+                <p className="text-sm text-red-500">{errors.referenceCode.message}</p>
+              )}
+              <p className="text-xs text-gray-500">
+                Used for generating invoice codes (e.g., LU_00001)
+              </p>
+            </div>
+
+            <div className="space-y-2">
               <Label htmlFor="vatNumber">VAT Number</Label>
               <Input id="vatNumber" {...register('vatNumber')} />
             </div>
+          </div>
 
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="paymentTerms">Payment Terms (days)</Label>
               <Input

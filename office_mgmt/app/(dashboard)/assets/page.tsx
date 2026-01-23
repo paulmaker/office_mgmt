@@ -11,11 +11,37 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { mockAssets } from '@/lib/mock-data'
+import { useState, useEffect } from 'react'
+import { getAssets } from '@/app/actions/assets'
 import { formatDate } from '@/lib/utils'
+import { useToast } from '@/hooks/use-toast'
 import { Plus, Truck, Wrench, AlertTriangle, CheckCircle, Calendar } from 'lucide-react'
+import type { CompanyAsset } from '@prisma/client'
 
 export default function AssetsPage() {
+  const [assets, setAssets] = useState<CompanyAsset[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const { toast } = useToast()
+
+  useEffect(() => {
+    loadAssets()
+  }, [])
+
+  const loadAssets = async () => {
+    try {
+      setIsLoading(true)
+      const data = await getAssets()
+      setAssets(data)
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to load assets',
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
   const getDaysUntil = (date: Date | null) => {
     if (!date) return null
     const today = new Date()
@@ -32,33 +58,39 @@ export default function AssetsPage() {
     return <Badge variant="success">Current</Badge>
   }
 
-  const vehicles = mockAssets.filter(a => a.type === 'VEHICLE')
-  const equipment = mockAssets.filter(a => a.type === 'EQUIPMENT')
+  const vehicles = assets.filter(a => a.type === 'VEHICLE')
+  const equipment = assets.filter(a => a.type === 'EQUIPMENT')
 
-  const upcomingReminders = mockAssets.flatMap(asset => {
+  const upcomingReminders = assets.flatMap(asset => {
     const reminders = []
-    if (asset.motDueDate) {
+    if (asset.motDueDate && asset.remindersEnabled) {
       const days = getDaysUntil(asset.motDueDate)
       if (days !== null && days <= 30) {
         reminders.push({ asset: asset.name, type: 'MOT', date: asset.motDueDate, days })
       }
     }
-    if (asset.taxDueDate) {
+    if (asset.taxDueDate && asset.remindersEnabled) {
       const days = getDaysUntil(asset.taxDueDate)
       if (days !== null && days <= 30) {
         reminders.push({ asset: asset.name, type: 'Tax', date: asset.taxDueDate, days })
       }
     }
-    if (asset.insuranceDueDate) {
+    if (asset.insuranceDueDate && asset.remindersEnabled) {
       const days = getDaysUntil(asset.insuranceDueDate)
       if (days !== null && days <= 30) {
         reminders.push({ asset: asset.name, type: 'Insurance', date: asset.insuranceDueDate, days })
       }
     }
-    if (asset.serviceDueDate) {
+    if (asset.serviceDueDate && asset.remindersEnabled) {
       const days = getDaysUntil(asset.serviceDueDate)
       if (days !== null && days <= 30) {
         reminders.push({ asset: asset.name, type: 'Service', date: asset.serviceDueDate, days })
+      }
+    }
+    if (asset.leaseExpiryDate && asset.remindersEnabled) {
+      const days = getDaysUntil(asset.leaseExpiryDate)
+      if (days !== null && days <= 30) {
+        reminders.push({ asset: asset.name, type: 'Lease Expiry', date: asset.leaseExpiryDate, days })
       }
     }
     return reminders
@@ -84,7 +116,7 @@ export default function AssetsPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>Total Assets</CardDescription>
-            <CardTitle className="text-3xl">{mockAssets.length}</CardTitle>
+            <CardTitle className="text-3xl">{isLoading ? '...' : assets.length}</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-xs text-gray-500">{vehicles.length} vehicles, {equipment.length} equipment</p>
@@ -167,11 +199,27 @@ export default function AssetsPage() {
                 <TableHead>Tax Due</TableHead>
                 <TableHead>Insurance Due</TableHead>
                 <TableHead>Service Due</TableHead>
+                <TableHead>Lease Expiry</TableHead>
+                <TableHead>Company Car</TableHead>
+                <TableHead>MerseyFlow</TableHead>
                 <TableHead>Reminders</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {vehicles.map((vehicle) => {
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="text-center py-8">
+                    <p className="text-gray-500">Loading assets...</p>
+                  </TableCell>
+                </TableRow>
+              ) : vehicles.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="text-center py-8">
+                    <p className="text-gray-500">No vehicles found</p>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                vehicles.map((vehicle) => {
                 const motDays = getDaysUntil(vehicle.motDueDate)
                 const taxDays = getDaysUntil(vehicle.taxDueDate)
                 const insuranceDays = getDaysUntil(vehicle.insuranceDueDate)
@@ -206,6 +254,31 @@ export default function AssetsPage() {
                       </div>
                     </TableCell>
                     <TableCell>
+                      {vehicle.leaseExpiryDate ? (
+                        <div className="flex flex-col gap-1">
+                          <span className="text-sm">{formatDate(vehicle.leaseExpiryDate)}</span>
+                          {getDaysUntil(vehicle.leaseExpiryDate) !== null && 
+                            getStatusBadge(getDaysUntil(vehicle.leaseExpiryDate))}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {vehicle.companyCar ? (
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <span className="text-gray-400 text-sm">No</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {vehicle.merseyFlow ? (
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <span className="text-gray-400 text-sm">No</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       {vehicle.remindersEnabled ? (
                         <CheckCircle className="h-4 w-4 text-green-500" />
                       ) : (
@@ -214,7 +287,7 @@ export default function AssetsPage() {
                     </TableCell>
                   </TableRow>
                 )
-              })}
+              ))}
             </TableBody>
           </Table>
         </CardContent>

@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import {
   Table,
   TableBody,
@@ -29,38 +28,38 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { ClientForm } from '@/components/clients/client-form'
-import { getClients, deleteClient } from '@/app/actions/clients'
+import { EmployeeForm } from '@/components/employees/employee-form'
+import { getEmployees, deleteEmployee } from '@/app/actions/employees'
 import { formatDate } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
-import { Plus, Search, Edit, Mail, Phone, MapPin, Trash2 } from 'lucide-react'
-import type { Client } from '@prisma/client'
+import { Plus, Search, Edit, Mail, Phone, Trash2, Car } from 'lucide-react'
+import type { Employee } from '@prisma/client'
 
-export default function ClientsPage() {
+export default function EmployeesPage() {
   const [searchTerm, setSearchTerm] = useState('')
-  const [clients, setClients] = useState<Client[]>([])
+  const [employees, setEmployees] = useState<Employee[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
-  const [editingClient, setEditingClient] = useState<Client | null>(null)
-  const [deletingClientId, setDeletingClientId] = useState<string | null>(null)
+  const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null)
+  const [deletingEmployeeId, setDeletingEmployeeId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [clientToDelete, setClientToDelete] = useState<Client | null>(null)
+  const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null)
   const { toast } = useToast()
 
   useEffect(() => {
-    loadClients()
+    loadEmployees()
   }, [])
 
-  const loadClients = async () => {
+  const loadEmployees = async () => {
     try {
       setIsLoading(true)
-      const data = await getClients()
-      setClients(data)
+      const data = await getEmployees()
+      setEmployees(data)
     } catch (error) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to load clients',
+        description: error instanceof Error ? error.message : 'Failed to load employees',
       })
     } finally {
       setIsLoading(false)
@@ -68,84 +67,84 @@ export default function ClientsPage() {
   }
 
   const handleCreateClick = () => {
-    setEditingClient(null)
+    setEditingEmployee(null)
     setIsDialogOpen(true)
   }
 
-  const handleEditClick = (client: Client) => {
-    setEditingClient(client)
+  const handleEditClick = (employee: Employee) => {
+    setEditingEmployee(employee)
     setIsDialogOpen(true)
   }
 
-  const handleDeleteClick = (client: Client) => {
-    setClientToDelete(client)
+  const handleDeleteClick = (employee: Employee) => {
+    setEmployeeToDelete(employee)
     setDeleteDialogOpen(true)
   }
 
   const confirmDelete = async () => {
-    if (!clientToDelete) return
+    if (!employeeToDelete) return
 
     try {
-      setDeletingClientId(clientToDelete.id)
-      await deleteClient(clientToDelete.id)
-      await loadClients()
+      setDeletingEmployeeId(employeeToDelete.id)
+      await deleteEmployee(employeeToDelete.id)
+      await loadEmployees()
       toast({
         variant: 'success',
-        title: 'Client deleted',
-        description: `${clientToDelete.name} has been successfully deleted.`,
+        title: 'Employee deleted',
+        description: `${employeeToDelete.name} has been successfully deleted.`,
       })
       setDeleteDialogOpen(false)
-      setClientToDelete(null)
+      setEmployeeToDelete(null)
     } catch (error) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to delete client',
+        description: error instanceof Error ? error.message : 'Failed to delete employee',
       })
     } finally {
-      setDeletingClientId(null)
+      setDeletingEmployeeId(null)
     }
   }
 
   const handleFormSuccess = () => {
     setIsDialogOpen(false)
-    const action = editingClient ? 'updated' : 'created'
+    const action = editingEmployee ? 'updated' : 'created'
     toast({
       variant: 'success',
-      title: `Client ${action}`,
-      description: `Client has been successfully ${action}.`,
+      title: `Employee ${action}`,
+      description: `Employee has been successfully ${action}.`,
     })
-    setEditingClient(null)
-    loadClients()
+    setEditingEmployee(null)
+    loadEmployees()
   }
 
-  const filteredClients = clients.filter(client =>
-    client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    client.referenceCode?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredEmployees = employees.filter(employee =>
+    employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    employee.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    employee.employeeId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    employee.car?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Clients</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Employees</h1>
           <p className="text-gray-500 mt-1">
-            Manage your client database and view account details
+            Manage your employees and their details
           </p>
         </div>
         <Button onClick={handleCreateClick}>
           <Plus className="h-4 w-4 mr-2" />
-          Add Client
+          Add Employee
         </Button>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>All Clients</CardTitle>
+          <CardTitle>All Employees</CardTitle>
           <CardDescription>
-            {filteredClients.length} client{filteredClients.length !== 1 ? 's' : ''} found
+            {filteredEmployees.length} employee{filteredEmployees.length !== 1 ? 's' : ''} found
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -153,7 +152,7 @@ export default function ClientsPage() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Input
-                placeholder="Search clients..."
+                placeholder="Search employees..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -164,13 +163,10 @@ export default function ClientsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Client Name</TableHead>
-                <TableHead>Reference Code</TableHead>
-                <TableHead>Company</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Employee ID</TableHead>
                 <TableHead>Contact</TableHead>
-                <TableHead>Address</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Payment Terms</TableHead>
+                <TableHead>Car</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -178,85 +174,73 @@ export default function ClientsPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
-                    <p className="text-gray-500">Loading clients...</p>
+                  <TableCell colSpan={6} className="text-center py-8">
+                    <p className="text-gray-500">Loading employees...</p>
                   </TableCell>
                 </TableRow>
-              ) : filteredClients.length === 0 ? (
+              ) : filteredEmployees.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
-                    <p className="text-gray-500">No clients found</p>
+                  <TableCell colSpan={6} className="text-center py-8">
+                    <p className="text-gray-500">No employees found</p>
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredClients.map((client) => (
-                  <TableRow key={client.id}>
-                    <TableCell className="font-medium">{client.name}</TableCell>
+                filteredEmployees.map((employee) => (
+                  <TableRow key={employee.id}>
+                    <TableCell className="font-medium">{employee.name}</TableCell>
                     <TableCell>
-                      {client.referenceCode ? (
-                        <Badge variant="secondary" className="font-mono">
-                          {client.referenceCode}
-                        </Badge>
+                      {employee.employeeId ? (
+                        <span className="font-mono text-sm">{employee.employeeId}</span>
                       ) : (
                         <span className="text-sm text-gray-400">-</span>
                       )}
                     </TableCell>
-                    <TableCell>{client.companyName || '-'}</TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-1 text-sm">
-                          <Mail className="h-3 w-3 text-gray-400" />
-                          <span className="text-gray-600">{client.email}</span>
-                        </div>
-                        {client.phone && (
+                        {employee.email && (
                           <div className="flex items-center gap-1 text-sm">
-                            <Phone className="h-3 w-3 text-gray-400" />
-                            <span className="text-gray-600">{client.phone}</span>
+                            <Mail className="h-3 w-3 text-gray-400" />
+                            <span className="text-gray-600">{employee.email}</span>
                           </div>
                         )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {client.address ? (
-                        <div className="flex items-center gap-1 text-sm">
-                          <MapPin className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                          <span className="text-gray-600">{client.address}</span>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-400">-</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        {client.vatRegistered && (
-                          <Badge variant="secondary" className="text-xs">VAT</Badge>
+                        {employee.phone && (
+                          <div className="flex items-center gap-1 text-sm">
+                            <Phone className="h-3 w-3 text-gray-400" />
+                            <span className="text-gray-600">{employee.phone}</span>
+                          </div>
                         )}
-                        {client.cisRegistered && (
-                          <Badge variant="secondary" className="text-xs">CIS</Badge>
-                        )}
-                        {!client.vatRegistered && !client.cisRegistered && (
+                        {!employee.email && !employee.phone && (
                           <span className="text-sm text-gray-400">-</span>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>{client.paymentTerms} days</TableCell>
+                    <TableCell>
+                      {employee.car ? (
+                        <div className="flex items-center gap-1 text-sm">
+                          <Car className="h-3 w-3 text-gray-400" />
+                          <span className="text-gray-600">{employee.car}</span>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400">-</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-gray-500">
-                      {formatDate(client.createdAt)}
+                      {formatDate(employee.createdAt)}
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleEditClick(client)}
+                          onClick={() => handleEditClick(employee)}
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDeleteClick(client)}
-                          disabled={deletingClientId === client.id}
+                          onClick={() => handleDeleteClick(employee)}
+                          disabled={deletingEmployeeId === employee.id}
                         >
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
@@ -267,7 +251,6 @@ export default function ClientsPage() {
               )}
             </TableBody>
           </Table>
-
         </CardContent>
       </Card>
 
@@ -276,11 +259,11 @@ export default function ClientsPage() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editingClient ? 'Edit Client' : 'Create New Client'}
+              {editingEmployee ? 'Edit Employee' : 'Create New Employee'}
             </DialogTitle>
           </DialogHeader>
-          <ClientForm
-            client={editingClient}
+          <EmployeeForm
+            employee={editingEmployee}
             onSuccess={handleFormSuccess}
             onCancel={() => setIsDialogOpen(false)}
           />
@@ -294,18 +277,18 @@ export default function ClientsPage() {
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
               This action cannot be undone. This will permanently delete{' '}
-              <strong>{clientToDelete?.name}</strong> and all associated data.
+              <strong>{employeeToDelete?.name}</strong> and all associated data.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setClientToDelete(null)}>
+            <AlertDialogCancel onClick={() => setEmployeeToDelete(null)}>
               Cancel
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDelete}
               className="bg-red-600 hover:bg-red-700"
             >
-              {deletingClientId ? 'Deleting...' : 'Delete'}
+              {deletingEmployeeId ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -315,35 +298,35 @@ export default function ClientsPage() {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>Total Clients</CardDescription>
-            <CardTitle className="text-3xl">{clients.length}</CardTitle>
+            <CardDescription>Total Employees</CardDescription>
+            <CardTitle className="text-3xl">{employees.length}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-gray-500">Active client accounts</p>
+            <p className="text-xs text-gray-500">Active employees</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>VAT Registered</CardDescription>
+            <CardDescription>With Cars</CardDescription>
             <CardTitle className="text-3xl">
-              {clients.filter(c => c.vatRegistered).length}
+              {employees.filter(e => e.car).length}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-gray-500">Clients registered for VAT</p>
+            <p className="text-xs text-gray-500">Employees with assigned cars</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>CIS Registered</CardDescription>
+            <CardDescription>With Email</CardDescription>
             <CardTitle className="text-3xl">
-              {clients.filter(c => c.cisRegistered).length}
+              {employees.filter(e => e.email).length}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-gray-500">CIS scheme contractors</p>
+            <p className="text-xs text-gray-500">Employees with email addresses</p>
           </CardContent>
         </Card>
       </div>

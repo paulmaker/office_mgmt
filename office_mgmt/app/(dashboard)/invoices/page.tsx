@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,18 +14,136 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { mockInvoices, mockClients, mockSubcontractors } from '@/lib/mock-data'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { InvoiceForm } from '@/components/invoices/invoice-form'
+import { getInvoices, deleteInvoice, getInvoice } from '@/app/actions/invoices'
 import { formatCurrency, formatDate, getInvoiceStatusColor } from '@/lib/utils'
-import { Plus, Search, Download, Eye, Mail } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
+import { Plus, Search, Download, Eye, Mail, Edit, Trash2 } from 'lucide-react'
+import type { Invoice } from '@prisma/client'
+
+type InvoiceWithRelations = Invoice & {
+  client?: { name: string; companyName: string | null } | null
+  subcontractor?: { name: string } | null
+  supplier?: { name: string } | null
+}
 
 export default function InvoicesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [activeTab, setActiveTab] = useState('all')
+  const [invoices, setInvoices] = useState<InvoiceWithRelations[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingInvoice, setEditingInvoice] = useState<InvoiceWithRelations | null>(null)
+  const [deletingInvoiceId, setDeletingInvoiceId] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [invoiceToDelete, setInvoiceToDelete] = useState<InvoiceWithRelations | null>(null)
+  const { toast } = useToast()
 
-  const filteredInvoices = mockInvoices.filter(invoice => {
+  useEffect(() => {
+    loadInvoices()
+  }, [])
+
+  const loadInvoices = async () => {
+    try {
+      setIsLoading(true)
+      const data = await getInvoices()
+      setInvoices(data as InvoiceWithRelations[])
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to load invoices',
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleCreateClick = () => {
+    setEditingInvoice(null)
+    setIsDialogOpen(true)
+  }
+
+  const handleEditClick = async (invoice: InvoiceWithRelations) => {
+    try {
+      const fullInvoice = await getInvoice(invoice.id)
+      setEditingInvoice(fullInvoice as InvoiceWithRelations)
+      setIsDialogOpen(true)
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to load invoice details',
+      })
+    }
+  }
+
+  const handleDeleteClick = (invoice: InvoiceWithRelations) => {
+    setInvoiceToDelete(invoice)
+    setDeleteDialogOpen(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!invoiceToDelete) return
+
+    try {
+      setDeletingInvoiceId(invoiceToDelete.id)
+      await deleteInvoice(invoiceToDelete.id)
+      await loadInvoices()
+      toast({
+        variant: 'success',
+        title: 'Invoice deleted',
+        description: `Invoice ${invoiceToDelete.invoiceNumber} has been successfully deleted.`,
+      })
+      setDeleteDialogOpen(false)
+      setInvoiceToDelete(null)
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete invoice',
+      })
+    } finally {
+      setDeletingInvoiceId(null)
+    }
+  }
+
+  const handleFormSuccess = () => {
+    setIsDialogOpen(false)
+    const action = editingInvoice ? 'updated' : 'created'
+    toast({
+      variant: 'success',
+      title: `Invoice ${action}`,
+      description: `Invoice has been successfully ${action}.`,
+    })
+    setEditingInvoice(null)
+    loadInvoices()
+  }
+
+  const filteredInvoices = invoices.filter(invoice => {
     const matchesSearch =
       invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.notes?.toLowerCase().includes(searchTerm.toLowerCase())
+      invoice.notes?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      invoice.client?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      invoice.client?.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      invoice.subcontractor?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      invoice.supplier?.name.toLowerCase().includes(searchTerm.toLowerCase())
 
     if (activeTab === 'all') return matchesSearch
     if (activeTab === 'sales') return matchesSearch && invoice.type === 'SALES'
@@ -35,25 +153,26 @@ export default function InvoicesPage() {
     return matchesSearch
   })
 
-  const getClientName = (invoice: typeof mockInvoices[0]) => {
-    if (invoice.clientId) {
-      const client = mockClients.find(c => c.id === invoice.clientId)
-      return client?.companyName || client?.name || 'Unknown'
+  const getClientName = (invoice: InvoiceWithRelations) => {
+    if (invoice.client) {
+      return invoice.client.companyName || invoice.client.name
     }
-    if (invoice.subcontractorId) {
-      const sub = mockSubcontractors.find(s => s.id === invoice.subcontractorId)
-      return sub?.name || 'Unknown'
+    if (invoice.subcontractor) {
+      return invoice.subcontractor.name
+    }
+    if (invoice.supplier) {
+      return invoice.supplier.name
     }
     return 'Unknown'
   }
 
   const stats = {
-    total: mockInvoices.length,
-    sales: mockInvoices.filter(i => i.type === 'SALES').length,
-    purchase: mockInvoices.filter(i => i.type === 'PURCHASE').length,
-    overdue: mockInvoices.filter(i => i.status === 'OVERDUE').length,
-    totalValue: mockInvoices.reduce((sum, i) => sum + i.total, 0),
-    outstanding: mockInvoices.filter(i => i.status !== 'PAID' && i.type === 'SALES').reduce((sum, i) => sum + i.total, 0),
+    total: invoices.length,
+    sales: invoices.filter(i => i.type === 'SALES').length,
+    purchase: invoices.filter(i => i.type === 'PURCHASE').length,
+    overdue: invoices.filter(i => i.status === 'OVERDUE').length,
+    totalValue: invoices.reduce((sum, i) => sum + i.total, 0),
+    outstanding: invoices.filter(i => i.status !== 'PAID' && i.type === 'SALES').reduce((sum, i) => sum + i.total, 0),
   }
 
   return (
@@ -70,7 +189,7 @@ export default function InvoicesPage() {
             <Download className="h-4 w-4 mr-2" />
             Export
           </Button>
-          <Button>
+          <Button onClick={handleCreateClick}>
             <Plus className="h-4 w-4 mr-2" />
             New Invoice
           </Button>
@@ -170,57 +289,118 @@ export default function InvoicesPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredInvoices.map((invoice) => (
-                <TableRow key={invoice.id}>
-                  <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
-                  <TableCell>
-                    <Badge variant={invoice.type === 'SALES' ? 'default' : 'secondary'}>
-                      {invoice.type}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{getClientName(invoice)}</TableCell>
-                  <TableCell className="text-gray-500">{formatDate(invoice.date)}</TableCell>
-                  <TableCell className="text-gray-500">{formatDate(invoice.dueDate)}</TableCell>
-                  <TableCell className="font-medium">{formatCurrency(invoice.total)}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        invoice.status === 'PAID' ? 'success' :
-                        invoice.status === 'OVERDUE' ? 'destructive' :
-                        invoice.status === 'SENT' ? 'default' :
-                        'secondary'
-                      }
-                    >
-                      {invoice.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button variant="ghost" size="sm">
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm">
-                        <Download className="h-4 w-4" />
-                      </Button>
-                      {invoice.type === 'SALES' && invoice.status !== 'PAID' && (
-                        <Button variant="ghost" size="sm">
-                          <Mail className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8">
+                    <p className="text-gray-500">Loading invoices...</p>
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : filteredInvoices.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8">
+                    <p className="text-gray-500">No invoices found</p>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredInvoices.map((invoice) => (
+                  <TableRow key={invoice.id}>
+                    <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
+                    <TableCell>
+                      <Badge variant={invoice.type === 'SALES' ? 'default' : 'secondary'}>
+                        {invoice.type}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{getClientName(invoice)}</TableCell>
+                    <TableCell className="text-gray-500">{formatDate(invoice.date)}</TableCell>
+                    <TableCell className="text-gray-500">{formatDate(invoice.dueDate)}</TableCell>
+                    <TableCell className="font-medium">{formatCurrency(invoice.total)}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="secondary"
+                        className={getInvoiceStatusColor(invoice.status)}
+                      >
+                        {invoice.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditClick(invoice)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        {invoice.status !== 'PAID' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteClick(invoice)}
+                            disabled={deletingInvoiceId === invoice.id}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="sm">
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm">
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        {invoice.type === 'SALES' && invoice.status !== 'PAID' && (
+                          <Button variant="ghost" size="sm">
+                            <Mail className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
-
-          {filteredInvoices.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-gray-500">No invoices found</p>
-            </div>
-          )}
         </CardContent>
       </Card>
+
+      {/* Create/Edit Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingInvoice ? 'Edit Invoice' : 'Create New Invoice'}
+            </DialogTitle>
+          </DialogHeader>
+          <InvoiceForm
+            invoice={editingInvoice as any}
+            onSuccess={handleFormSuccess}
+            onCancel={() => setIsDialogOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete invoice{' '}
+              <strong>{invoiceToDelete?.invoiceNumber}</strong> and all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setInvoiceToDelete(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deletingInvoiceId ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

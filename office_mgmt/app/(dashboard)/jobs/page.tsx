@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,18 +14,134 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { mockJobs, mockClients, mockEmployees } from '@/lib/mock-data'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { JobForm } from '@/components/jobs/job-form'
+import { getJobs, deleteJob, getJob } from '@/app/actions/jobs'
 import { formatCurrency, formatDate, getJobStatusColor } from '@/lib/utils'
-import { Plus, Search, Edit, MapPin, CheckCircle2, XCircle } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
+import { Plus, Search, Edit, Trash2, CheckCircle2, XCircle, Users } from 'lucide-react'
+import type { Job } from '@prisma/client'
+
+type JobWithRelations = Job & {
+  client: { name: string; companyName: string | null; address: string | null }
+  employees: Array<{ employee: { name: string } }>
+  lineItems: Array<{ description: string; amount: number }>
+}
 
 export default function JobsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [activeTab, setActiveTab] = useState('all')
+  const [jobs, setJobs] = useState<JobWithRelations[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [editingJob, setEditingJob] = useState<JobWithRelations | null>(null)
+  const [deletingJobId, setDeletingJobId] = useState<string | null>(null)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [jobToDelete, setJobToDelete] = useState<JobWithRelations | null>(null)
+  const { toast } = useToast()
 
-  const filteredJobs = mockJobs.filter(job => {
+  useEffect(() => {
+    loadJobs()
+  }, [])
+
+  const loadJobs = async () => {
+    try {
+      setIsLoading(true)
+      const data = await getJobs()
+      setJobs(data as JobWithRelations[])
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to load jobs',
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleCreateClick = () => {
+    setEditingJob(null)
+    setIsDialogOpen(true)
+  }
+
+  const handleEditClick = async (job: JobWithRelations) => {
+    try {
+      const fullJob = await getJob(job.id)
+      setEditingJob(fullJob as JobWithRelations)
+      setIsDialogOpen(true)
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to load job details',
+      })
+    }
+  }
+
+  const handleDeleteClick = (job: JobWithRelations) => {
+    setJobToDelete(job)
+    setDeleteDialogOpen(true)
+  }
+
+  const confirmDelete = async () => {
+    if (!jobToDelete) return
+
+    try {
+      setDeletingJobId(jobToDelete.id)
+      await deleteJob(jobToDelete.id)
+      await loadJobs()
+      toast({
+        variant: 'success',
+        title: 'Job deleted',
+        description: `Job ${jobToDelete.jobNumber} has been successfully deleted.`,
+      })
+      setDeleteDialogOpen(false)
+      setJobToDelete(null)
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete job',
+      })
+    } finally {
+      setDeletingJobId(null)
+    }
+  }
+
+  const handleFormSuccess = () => {
+    setIsDialogOpen(false)
+    const action = editingJob ? 'updated' : 'created'
+    toast({
+      variant: 'success',
+      title: `Job ${action}`,
+      description: `Job has been successfully ${action}.`,
+    })
+    setEditingJob(null)
+    loadJobs()
+  }
+
+  const filteredJobs = jobs.filter(job => {
     const matchesSearch =
       job.jobNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job.jobDescription.toLowerCase().includes(searchTerm.toLowerCase())
+      job.jobDescription.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      job.client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      job.client.companyName?.toLowerCase().includes(searchTerm.toLowerCase())
 
     if (activeTab === 'all') return matchesSearch
     if (activeTab === 'pending') return matchesSearch && job.status === 'PENDING'
@@ -35,29 +151,13 @@ export default function JobsPage() {
     return matchesSearch
   })
 
-  const getClientName = (job: typeof mockJobs[0]) => {
-    const client = mockClients.find(c => c.id === job.clientId)
-    return client?.companyName || client?.name || 'Unknown'
-  }
-
-  const getClientAddress = (job: typeof mockJobs[0]) => {
-    const client = mockClients.find(c => c.id === job.clientId)
-    return client?.address || '-'
-  }
-
-  const getEmployeeName = (job: typeof mockJobs[0]) => {
-    if (!job.employeeId) return '-'
-    const employee = mockEmployees.find(e => e.id === job.employeeId)
-    return employee?.name || 'Unknown'
-  }
-
   const stats = {
-    total: mockJobs.length,
-    pending: mockJobs.filter(j => j.status === 'PENDING').length,
-    inProgress: mockJobs.filter(j => j.status === 'IN_PROGRESS').length,
-    complete: mockJobs.filter(j => j.status === 'COMPLETE').length,
-    totalValue: mockJobs.reduce((sum, j) => sum + j.price, 0),
-    unpaidValue: mockJobs.filter(j => !j.invoicePaid).reduce((sum, j) => sum + j.price, 0),
+    total: jobs.length,
+    pending: jobs.filter(j => j.status === 'PENDING').length,
+    inProgress: jobs.filter(j => j.status === 'IN_PROGRESS').length,
+    complete: jobs.filter(j => j.status === 'COMPLETE').length,
+    totalValue: jobs.reduce((sum, j) => sum + j.price, 0),
+    unpaidValue: jobs.filter(j => !j.invoicePaid).reduce((sum, j) => sum + j.price, 0),
   }
 
   return (
@@ -69,7 +169,7 @@ export default function JobsPage() {
             Manage jobs and track work progress for clients
           </p>
         </div>
-        <Button>
+        <Button onClick={handleCreateClick}>
           <Plus className="h-4 w-4 mr-2" />
           New Job
         </Button>
@@ -111,28 +211,24 @@ export default function JobsPage() {
           <Tabs.Root value={activeTab} onValueChange={setActiveTab}>
             <Tabs.List className="flex gap-4 border-b mb-4">
               <Tabs.Trigger
-                key="tab-all"
                 value="all"
                 className="pb-2 text-sm font-medium data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600"
               >
                 All Jobs
               </Tabs.Trigger>
               <Tabs.Trigger
-                key="tab-pending"
                 value="pending"
                 className="pb-2 text-sm font-medium data-[state=active]:border-b-2 data-[state=active]:border-yellow-600 data-[state=active]:text-yellow-600"
               >
                 Pending
               </Tabs.Trigger>
               <Tabs.Trigger
-                key="tab-in-progress"
                 value="in_progress"
                 className="pb-2 text-sm font-medium data-[state=active]:border-b-2 data-[state=active]:border-blue-600 data-[state=active]:text-blue-600"
               >
                 In Progress
               </Tabs.Trigger>
               <Tabs.Trigger
-                key="tab-complete"
                 value="complete"
                 className="pb-2 text-sm font-medium data-[state=active]:border-b-2 data-[state=active]:border-green-600 data-[state=active]:text-green-600"
               >
@@ -163,71 +259,143 @@ export default function JobsPage() {
               <TableRow>
                 <TableHead>Job Number</TableHead>
                 <TableHead>Client</TableHead>
-                <TableHead>Address</TableHead>
                 <TableHead>Job Description</TableHead>
-                <TableHead>Date Work Commenced</TableHead>
+                <TableHead>Date Commenced</TableHead>
                 <TableHead>Price</TableHead>
-                <TableHead>Operative/Employee</TableHead>
+                <TableHead>Employees</TableHead>
+                <TableHead>Line Items</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Invoice Paid</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredJobs.map((job) => (
-                <TableRow key={job.id}>
-                  <TableCell className="font-medium">{job.jobNumber}</TableCell>
-                  <TableCell>{getClientName(job)}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1 text-sm">
-                      <MapPin className="h-3 w-3 text-gray-400 flex-shrink-0" />
-                      <span className="text-gray-600">{getClientAddress(job)}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="max-w-xs truncate">{job.jobDescription}</TableCell>
-                  <TableCell className="text-gray-500">
-                    {formatDate(job.dateWorkCommenced)}
-                  </TableCell>
-                  <TableCell className="font-medium">{formatCurrency(job.price)}</TableCell>
-                  <TableCell>{getEmployeeName(job)}</TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="secondary"
-                      className={getJobStatusColor(job.status)}
-                    >
-                      {job.status.replace('_', ' ')}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {job.invoicePaid ? (
-                      <div className="flex items-center gap-1 text-green-600">
-                        <CheckCircle2 className="h-4 w-4" />
-                        <span className="text-sm">Yes</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1 text-gray-400">
-                        <XCircle className="h-4 w-4" />
-                        <span className="text-sm">No</span>
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm">
-                      <Edit className="h-4 w-4" />
-                    </Button>
+              {isLoading ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="text-center py-8">
+                    <p className="text-gray-500">Loading jobs...</p>
                   </TableCell>
                 </TableRow>
-              ))}
+              ) : filteredJobs.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={10} className="text-center py-8">
+                    <p className="text-gray-500">No jobs found</p>
+                  </TableCell>
+                </TableRow>
+              ) : (
+                filteredJobs.map((job) => (
+                  <TableRow key={job.id}>
+                    <TableCell className="font-medium">{job.jobNumber}</TableCell>
+                    <TableCell>
+                      {job.client.companyName || job.client.name}
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate">{job.jobDescription}</TableCell>
+                    <TableCell className="text-gray-500">
+                      {formatDate(job.dateWorkCommenced)}
+                    </TableCell>
+                    <TableCell className="font-medium">{formatCurrency(job.price)}</TableCell>
+                    <TableCell>
+                      {job.employees && job.employees.length > 0 ? (
+                        <div className="flex items-center gap-1 text-sm">
+                          <Users className="h-3 w-3 text-gray-400" />
+                          <span>{job.employees.map(e => e.employee.name).join(', ')}</span>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-400">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm">
+                        {job.lineItems?.length || 0} item{job.lineItems?.length !== 1 ? 's' : ''}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="secondary"
+                        className={getJobStatusColor(job.status)}
+                      >
+                        {job.status.replace('_', ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {job.invoicePaid ? (
+                        <div className="flex items-center gap-1 text-green-600">
+                          <CheckCircle2 className="h-4 w-4" />
+                          <span className="text-sm">Yes</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 text-gray-400">
+                          <XCircle className="h-4 w-4" />
+                          <span className="text-sm">No</span>
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEditClick(job)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteClick(job)}
+                          disabled={deletingJobId === job.id}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-500" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
-
-          {filteredJobs.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-gray-500">No jobs found</p>
-            </div>
-          )}
         </CardContent>
       </Card>
+
+      {/* Create/Edit Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingJob ? 'Edit Job' : 'Create New Job'}
+            </DialogTitle>
+          </DialogHeader>
+          <JobForm
+            job={editingJob as any}
+            onSuccess={handleFormSuccess}
+            onCancel={() => setIsDialogOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete job{' '}
+              <strong>{jobToDelete?.jobNumber}</strong> and all associated data.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setJobToDelete(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deletingJobId ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
