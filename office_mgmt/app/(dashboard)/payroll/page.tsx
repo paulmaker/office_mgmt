@@ -58,7 +58,7 @@ export default function PayrollPage() {
   const totalCIS = approvedTimesheets.reduce((sum, t) => sum + t.cisDeduction, 0)
   const totalNet = approvedTimesheets.reduce((sum, t) => sum + t.netAmount, 0)
 
-  const cisByContractor = mockSubcontractors.map(sub => {
+  const cisByContractor = subcontractors.map(sub => {
     const timesheets = approvedTimesheets.filter(t => t.subcontractorId === sub.id)
     const gross = timesheets.reduce((sum, t) => sum + t.grossAmount, 0)
     const cis = timesheets.reduce((sum, t) => sum + t.cisDeduction, 0)
