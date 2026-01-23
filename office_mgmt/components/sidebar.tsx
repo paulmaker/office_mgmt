@@ -18,11 +18,13 @@ import {
   ClipboardList,
   Shield,
   LogOut,
+  Briefcase,
 } from 'lucide-react'
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Clients', href: '/clients', icon: Users },
+  { name: 'Subcontractors', href: '/subcontractors', icon: Briefcase },
   { name: 'Jobs', href: '/jobs', icon: ClipboardList },
   { name: 'Invoices', href: '/invoices', icon: FileText },
   { name: 'Timesheets', href: '/timesheets', icon: Clock },
