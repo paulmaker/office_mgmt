@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -186,19 +185,6 @@ export function ReconcileDialog({ open, onOpenChange, transaction, onSuccess }: 
               onChange={setDocumentUrl}
               onRemove={() => setDocumentUrl('')}
             />
-            <div className="mt-2">
-              <Label htmlFor="documentUrl" className="text-xs text-gray-500">
-                Or enter URL manually:
-              </Label>
-              <Input
-                id="documentUrl"
-                type="url"
-                value={documentUrl}
-                onChange={(e) => setDocumentUrl(e.target.value)}
-                placeholder="https://..."
-                className="mt-1"
-              />
-            </div>
           </div>
 
           {/* Notes */}

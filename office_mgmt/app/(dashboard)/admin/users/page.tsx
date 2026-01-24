@@ -14,11 +14,19 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Plus, Users, Edit, CheckCircle, XCircle } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
+import { Plus, Users, Edit, CheckCircle, XCircle, Mail, Loader2 } from 'lucide-react'
 import { createUser, getUsers, updateUser } from '@/app/actions/admin/users'
 import { getEntities } from '@/app/actions/admin/entities'
 import { formatDate } from '@/lib/utils'
 import type { Role } from '@/lib/platform-core/rbac/types'
+import { useToast } from '@/hooks/use-toast'
 
 const ROLES: { value: Role; label: string }[] = [
   { value: 'PLATFORM_ADMIN', label: 'Platform Admin' },
@@ -31,8 +39,11 @@ export default function UsersPage() {
   const [users, setUsers] = useState<any[]>([])
   const [entities, setEntities] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [showForm, setShowForm] = useState(false)
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<any>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const { toast } = useToast()
+  
   const [formData, setFormData] = useState({
     email: '',
     name: '',
@@ -55,7 +66,11 @@ export default function UsersPage() {
       setEntities(entitiesData)
     } catch (error: any) {
       console.error('Error loading data:', error)
-      alert(error.message || 'Failed to load users')
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || 'Failed to load users'
+      })
     } finally {
       setLoading(false)
     }
@@ -63,6 +78,7 @@ export default function UsersPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setSubmitting(true)
     try {
       if (editing) {
         await updateUser(editing.id, {
@@ -71,16 +87,38 @@ export default function UsersPage() {
           role: formData.role,
           entityId: formData.entityId,
         })
+        toast({
+            variant: "success",
+            title: "User updated",
+            description: "User details have been updated successfully."
+        })
       } else {
         await createUser(formData)
+        toast({
+            variant: "success",
+            title: "Invitation Sent",
+            description: `An invite email has been sent to ${formData.email}.`
+        })
       }
-      setShowForm(false)
+      setIsDialogOpen(false)
       setEditing(null)
       setFormData({ email: '', name: '', entityId: '', role: 'ENTITY_USER' })
       loadData()
     } catch (error: any) {
-      alert(error.message || 'Failed to save user')
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message || 'Failed to save user'
+      })
+    } finally {
+        setSubmitting(false)
     }
+  }
+
+  const handleCreateClick = () => {
+      setEditing(null)
+      setFormData({ email: '', name: '', entityId: '', role: 'ENTITY_USER' })
+      setIsDialogOpen(true)
   }
 
   const handleEdit = (user: any) => {
@@ -91,13 +129,7 @@ export default function UsersPage() {
       entityId: user.entityId,
       role: user.role,
     })
-    setShowForm(true)
-  }
-
-  const handleCancel = () => {
-    setShowForm(false)
-    setEditing(null)
-    setFormData({ email: '', name: '', entityId: '', role: 'ENTITY_USER' })
+    setIsDialogOpen(true)
   }
 
   const getRoleBadgeVariant = (role: Role) => {
@@ -119,99 +151,14 @@ export default function UsersPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Users</h1>
           <p className="text-gray-500 mt-1">
-            Manage user accounts and roles
+            Manage user accounts, roles, and invitations
           </p>
         </div>
-        <Button onClick={() => setShowForm(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add User
+        <Button onClick={handleCreateClick}>
+          <Mail className="h-4 w-4 mr-2" />
+          Invite User
         </Button>
       </div>
-
-      {showForm && (
-        <Card>
-          <CardHeader>
-            <CardTitle>{editing ? 'Edit User' : 'New User'}</CardTitle>
-            <CardDescription>
-              {editing ? 'Update user details' : 'Create a new user account'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  required
-                  disabled={!!editing}
-                />
-                {editing && (
-                  <p className="text-xs text-gray-500">Email cannot be changed</p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="entityId">Company</Label>
-                <select
-                  id="entityId"
-                  value={formData.entityId}
-                  onChange={(e) => setFormData({ ...formData, entityId: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  required
-                >
-                  <option value="">Select a company</option>
-                  {entities.map((entity) => (
-                    <option key={entity.id} value={entity.id}>
-                      {entity.name} ({entity.tenantAccount.name})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="role">Role</Label>
-                <select
-                  id="role"
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value as Role })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md"
-                  required
-                >
-                  {ROLES.map((role) => (
-                    <option key={role.value} value={role.value}>
-                      {role.label}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500">
-                  Platform Admin: Full system access
-                  <br />
-                  Account Admin: Manage all companies in organisation
-                  <br />
-                  Entity Admin: Manage users and data in company
-                  <br />
-                  Entity User: Standard user with read/create permissions
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button type="submit">{editing ? 'Update' : 'Create'}</Button>
-                <Button type="button" variant="outline" onClick={handleCancel}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      )}
 
       <Card>
         <CardHeader>
@@ -222,9 +169,18 @@ export default function UsersPage() {
         </CardHeader>
         <CardContent>
           {loading ? (
-            <p className="text-gray-500">Loading...</p>
+            <div className="text-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto text-gray-400" />
+                <p className="text-gray-500 mt-2">Loading users...</p>
+            </div>
           ) : users.length === 0 ? (
-            <p className="text-gray-500">No users found. Create your first one above.</p>
+            <div className="text-center py-8">
+                <p className="text-gray-500 mb-4">No users found. Invite your first team member.</p>
+                <Button onClick={handleCreateClick} variant="outline">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Invite User
+                </Button>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -253,7 +209,7 @@ export default function UsersPage() {
                     </TableCell>
                     <TableCell>
                       {user.isActive ? (
-                        <Badge variant="default" className="bg-green-600">
+                        <Badge variant="default" className="bg-green-600 hover:bg-green-700">
                           <CheckCircle className="h-3 w-3 mr-1" />
                           Active
                         </Badge>
@@ -268,7 +224,7 @@ export default function UsersPage() {
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
-                          variant="outline"
+                          variant="ghost"
                           size="sm"
                           onClick={() => handleEdit(user)}
                         >
@@ -283,6 +239,95 @@ export default function UsersPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+            <DialogHeader>
+                <DialogTitle>{editing ? 'Edit User' : 'Invite New User'}</DialogTitle>
+                <DialogDescription>
+                    {editing 
+                        ? 'Update user details and permissions.' 
+                        : 'Send an email invitation to a new user.'}
+                </DialogDescription>
+            </DialogHeader>
+            
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  required
+                  disabled={!!editing}
+                  placeholder="colleague@example.com"
+                />
+                {!editing && (
+                  <p className="text-xs text-gray-500 flex items-center gap-1">
+                    <Mail className="h-3 w-3" />
+                    An invitation link will be sent to this address
+                  </p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="John Doe"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="entityId">Company</Label>
+                <select
+                  id="entityId"
+                  value={formData.entityId}
+                  onChange={(e) => setFormData({ ...formData, entityId: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-background"
+                  required
+                >
+                  <option value="">Select a company</option>
+                  {entities.map((entity) => (
+                    <option key={entity.id} value={entity.id}>
+                      {entity.name} ({entity.tenantAccount.name})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="role">Role</Label>
+                <select
+                  id="role"
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value as Role })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-background"
+                  required
+                >
+                  {ROLES.map((role) => (
+                    <option key={role.value} value={role.value}>
+                      {role.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500">
+                    Select the appropriate access level for this user.
+                </p>
+              </div>
+              
+              <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={submitting}>
+                    {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    {editing ? 'Update User' : 'Send Invitation'}
+                </Button>
+              </div>
+            </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

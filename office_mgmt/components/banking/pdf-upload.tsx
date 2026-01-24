@@ -4,8 +4,9 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import { Upload, File, X } from 'lucide-react'
+import { Upload, File, X, Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { getUploadUrl } from '@/app/actions/upload'
 
 interface PDFUploadProps {
   value?: string
@@ -31,12 +32,12 @@ export function PDFUpload({ value, onChange, onRemove }: PDFUploadProps) {
       return
     }
 
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
+    // Validate file size (max 50MB for S3, much larger than before)
+    if (file.size > 50 * 1024 * 1024) {
       toast({
         variant: 'destructive',
         title: 'File too large',
-        description: 'Please upload a file smaller than 10MB',
+        description: 'Please upload a file smaller than 50MB',
       })
       return
     }
@@ -44,47 +45,64 @@ export function PDFUpload({ value, onChange, onRemove }: PDFUploadProps) {
     setIsUploading(true)
 
     try {
-      // Convert to base64 for storage
-      // In production, you would upload to Vercel Blob, S3, or similar
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        const base64 = reader.result as string
-        // Store as data URL (can be enhanced to use proper storage service)
-        onChange(base64)
-        toast({
-          variant: 'success',
-          title: 'File uploaded',
-          description: 'PDF has been uploaded successfully',
-        })
-        setIsUploading(false)
+      // 1. Get Presigned URL
+      const { url, key } = await getUploadUrl(file.name, file.type)
+
+      // 2. Upload directly to S3
+      const uploadResponse = await fetch(url, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+        },
+      })
+
+      if (!uploadResponse.ok) {
+        throw new Error('Upload to storage failed')
       }
-      reader.onerror = () => {
-        toast({
-          variant: 'destructive',
-          title: 'Upload failed',
-          description: 'Failed to read the file',
-        })
-        setIsUploading(false)
-      }
-      reader.readAsDataURL(file)
+
+      // 3. Store the key
+      onChange(key)
+      
+      toast({
+        variant: 'success',
+        title: 'File uploaded',
+        description: 'PDF has been uploaded successfully',
+      })
     } catch (error) {
+      console.error(error)
       toast({
         variant: 'destructive',
         title: 'Upload failed',
         description: error instanceof Error ? error.message : 'Failed to upload file',
       })
+    } finally {
       setIsUploading(false)
     }
+  }
+
+  const handleView = () => {
+      if (!value) return
+      
+      // If it's a legacy base64 file (starts with data:), open directly
+      if (value.startsWith('data:') || value.startsWith('http')) {
+          window.open(value, '_blank')
+          return
+      }
+
+      // Otherwise it's an S3 key, use our secure proxy route
+      // We pass the key as the path
+      window.open(`/api/files/${value}`, '_blank')
   }
 
   if (value) {
     return (
       <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
         <File className="h-5 w-5 text-gray-500" />
-        <div className="flex-1">
-          <p className="text-sm font-medium">PDF Document</p>
-          <p className="text-xs text-gray-500">
-            {value.startsWith('data:') ? 'Base64 encoded' : 'URL provided'}
+        <div className="flex-1 overflow-hidden">
+          <p className="text-sm font-medium truncate">Document Uploaded</p>
+          <p className="text-xs text-gray-500 truncate">
+            {value.startsWith('data:') ? 'Legacy File' : 'Stored Securely'}
           </p>
         </div>
         {onRemove && (
@@ -99,14 +117,7 @@ export function PDFUpload({ value, onChange, onRemove }: PDFUploadProps) {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => {
-            if (value.startsWith('data:')) {
-              // Open PDF in new window
-              window.open(value, '_blank')
-            } else {
-              window.open(value, '_blank')
-            }
-          }}
+          onClick={handleView}
         >
           View
         </Button>
@@ -131,12 +142,16 @@ export function PDFUpload({ value, onChange, onRemove }: PDFUploadProps) {
           onClick={() => document.getElementById('pdf-upload')?.click()}
           disabled={isUploading}
         >
-          <Upload className="h-4 w-4 mr-2" />
+          {isUploading ? (
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          ) : (
+              <Upload className="h-4 w-4 mr-2" />
+          )}
           {isUploading ? 'Uploading...' : 'Upload'}
         </Button>
       </div>
       <p className="text-xs text-gray-500">
-        Upload PDF remittance document (max 10MB). Alternatively, provide a URL below.
+        Upload PDF remittance document (max 50MB).
       </p>
     </div>
   )
