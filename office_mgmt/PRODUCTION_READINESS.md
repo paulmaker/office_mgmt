@@ -284,11 +284,20 @@ This document outlines the steps required to bring the Office Management System 
   - Install PDF library (`@react-pdf/renderer` or `pdfkit`)
   - Create invoice template
   - Generate downloadable PDFs
-  - Store PDFs (optional: S3, Cloudinary)
+
+### 11. File Storage & Optimization
+- [ ] **Migrate from Base64 to Object Storage**
+  - Currently, uploaded PDFs (Bank Transaction remittances) are stored as Base64 in the database
+  - **CRITICAL**: Migrate to Vercel Blob, AWS S3, or Cloudinary for production
+  - Update `BankTransaction` schema to store URL references instead of base64 strings
+  - Implement file upload API route
+
+- [ ] **Generated Documents**
+  - Store generated invoice PDFs in object storage (optional but recommended)
 
 ## 🟢 Nice to Have (Enhancements)
 
-### 11. CI/CD Pipeline
+### 12. CI/CD Pipeline
 - [ ] **Set up GitHub Actions or similar**
   - Run tests on PR
   - Run linting

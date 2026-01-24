@@ -425,7 +425,12 @@ export default function Loading() {
 
 ### Security
 
-**1. Update `next.config.ts`**
+**1. File Storage Migration**
+- Integrate Vercel Blob or AWS S3
+- Migrate Bank Transaction documents from Base64 to object storage
+- Update upload components to upload directly to storage and save URL
+
+**2. Update `next.config.ts`**
 ```typescript
 import type { NextConfig } from "next";
 
