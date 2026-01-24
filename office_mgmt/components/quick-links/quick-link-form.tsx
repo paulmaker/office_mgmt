@@ -14,7 +14,7 @@ const quickLinkSchema = z.object({
   name: z.string().min(1, "Name is required"),
   url: z.string().url("Must be a valid URL"),
   category: z.string().min(1, "Category is required"),
-  displayOrder: z.number().int().default(0),
+  displayOrder: z.number().int(),
 })
 
 type QuickLinkFormData = z.infer<typeof quickLinkSchema>

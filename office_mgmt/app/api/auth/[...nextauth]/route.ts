@@ -7,7 +7,7 @@ import { getUserEntity } from "@/lib/platform-core/multi-tenancy"
 import { compare } from "bcryptjs"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(prisma),
+  adapter: PrismaAdapter(prisma) as any,
   providers: [
     CredentialsProvider({
       name: "Credentials",
