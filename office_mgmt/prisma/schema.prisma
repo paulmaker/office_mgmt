@@ -102,11 +102,16 @@ model User {
   id            String    @id @default(cuid())
   name          String?
   email         String    @unique
+  password      String?   // Hashed password
   emailVerified DateTime?
   image         String?
   entityId      String    // User belongs to one Entity
   role          Role      @default(ENTITY_USER)
   isActive      Boolean   @default(true)
+  
+  resetToken          String?   @unique
+  resetTokenExpiry    DateTime?
+  
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

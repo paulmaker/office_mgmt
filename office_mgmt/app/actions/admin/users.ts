@@ -5,6 +5,9 @@ import { isPlatformAdmin, isAccountAdmin, isEntityAdmin } from '@/lib/platform-c
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
 import type { Role } from '@/lib/platform-core/rbac/types'
+import { randomBytes } from 'crypto'
+import { addHours } from 'date-fns'
+import { resend, EMAIL_FROM } from '@/lib/email'
 
 /**
  * Create a new User
@@ -54,6 +57,10 @@ export async function createUser(data: {
     throw new Error('A user with this email already exists')
   }
 
+  // Generate invite token
+  const token = randomBytes(32).toString('hex')
+  const expiry = addHours(new Date(), 48) // 48 hours for invite
+
   const user = await prisma.user.create({
     data: {
       email: data.email,
@@ -61,6 +68,8 @@ export async function createUser(data: {
       entityId: data.entityId,
       role: data.role,
       isActive: true,
+      resetToken: token,
+      resetTokenExpiry: expiry,
     },
     include: {
       entity: {
@@ -75,6 +84,29 @@ export async function createUser(data: {
       },
     },
   })
+
+  // Send Invite Email
+  try {
+    const baseUrl = process.env.NEXTAUTH_URL || process.env.AUTH_URL || 'http://localhost:3000'
+    const inviteUrl = `${baseUrl}/auth/reset-password?token=${token}`
+
+    await resend.emails.send({
+        from: EMAIL_FROM,
+        to: user.email,
+        subject: `Welcome to ${user.entity.name}`,
+        html: `
+          <p>Hello ${user.name || 'there'},</p>
+          <p>You have been invited to join <strong>${user.entity.name}</strong> on the Office Manager platform.</p>
+          <p>Click the link below to set your password and access your account:</p>
+          <a href="${inviteUrl}">${inviteUrl}</a>
+          <p>This link will expire in 48 hours.</p>
+        `
+    })
+  } catch (error) {
+    console.error("Failed to send invite email:", error)
+    // We don't throw here to avoid rolling back user creation if email fails
+    // But in production you might want to handle this better (e.g. return warning)
+  }
 
   return user
 }
@@ -129,7 +161,9 @@ export async function getUsers(entityId?: string) {
     return prisma.user.findMany({
       where: {
         entity: {
-          tenantAccountId: userEntity.accountId,
+          tenantAccount: {
+            id: userEntity.accountId,
+          },
         },
       },
       include: {

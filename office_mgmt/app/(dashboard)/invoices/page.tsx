@@ -32,9 +32,10 @@ import {
 } from '@/components/ui/alert-dialog'
 import { InvoiceForm } from '@/components/invoices/invoice-form'
 import { getInvoices, deleteInvoice, getInvoice } from '@/app/actions/invoices'
+import { sendInvoiceEmail } from '@/app/actions/email'
 import { formatCurrency, formatDate, getInvoiceStatusColor } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
-import { Plus, Search, Download, Eye, Mail, Edit, Trash2 } from 'lucide-react'
+import { Plus, Search, Download, Eye, Mail, Edit, Trash2, Loader2 } from 'lucide-react'
 import type { Invoice } from '@prisma/client'
 
 type InvoiceWithRelations = Invoice & {
@@ -53,6 +54,7 @@ export default function InvoicesPage() {
   const [deletingInvoiceId, setDeletingInvoiceId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [invoiceToDelete, setInvoiceToDelete] = useState<InvoiceWithRelations | null>(null)
+  const [sendingEmailId, setSendingEmailId] = useState<string | null>(null)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -121,6 +123,32 @@ export default function InvoicesPage() {
       })
     } finally {
       setDeletingInvoiceId(null)
+    }
+  }
+
+  const handleDownload = (id: string) => {
+    window.open(`/api/invoices/${id}/pdf`, '_blank')
+  }
+
+  const handleSendEmail = async (id: string) => {
+    try {
+      setSendingEmailId(id)
+      await sendInvoiceEmail(id)
+      toast({
+        variant: 'success',
+        title: 'Email sent',
+        description: 'Invoice has been emailed to the client.',
+      })
+      // Refresh to update status if changed to SENT
+      loadInvoices()
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error sending email',
+        description: error instanceof Error ? error.message : 'Failed to send email',
+      })
+    } finally {
+      setSendingEmailId(null)
     }
   }
 
@@ -341,15 +369,24 @@ export default function InvoicesPage() {
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
                         )}
-                        <Button variant="ghost" size="sm">
+                        <Button variant="ghost" size="sm" onClick={() => handleDownload(invoice.id)}>
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm">
+                        <Button variant="ghost" size="sm" onClick={() => handleDownload(invoice.id)}>
                           <Download className="h-4 w-4" />
                         </Button>
                         {invoice.type === 'SALES' && invoice.status !== 'PAID' && (
-                          <Button variant="ghost" size="sm">
-                            <Mail className="h-4 w-4" />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleSendEmail(invoice.id)}
+                            disabled={sendingEmailId === invoice.id}
+                          >
+                            {sendingEmailId === invoice.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Mail className="h-4 w-4" />
+                            )}
                           </Button>
                         )}
                       </div>

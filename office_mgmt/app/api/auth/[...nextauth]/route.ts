@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import CredentialsProvider from "next-auth/providers/credentials"
 import { getUserPermissions } from "@/lib/platform-core/rbac"
 import { getUserEntity } from "@/lib/platform-core/multi-tenancy"
+import { compare } from "bcryptjs"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -15,15 +16,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
-        if (!credentials?.email) {
+        if (!credentials?.email || !credentials?.password) {
           return null
         }
-
-        // TODO: Re-enable password check when password field is added to User model
-        // For now, password check is disabled for development
-        // if (!credentials?.password) {
-        //   return null
-        // }
 
         try {
           const user = await prisma.user.findUnique({
@@ -46,12 +41,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             return null
           }
 
-          // TODO: Implement password hashing check when password field is added to User model
-          // For now, this is a placeholder that allows any user to sign in
-          // In production, you'll need to:
-          // 1. Add password field to User model
-          // 2. Hash passwords on user creation
-          // 3. Compare hashed passwords here
+          // If user has a password set, verify it
+          if (user.password) {
+            const isValid = await compare(credentials.password as string, user.password)
+            if (!isValid) {
+              return null
+            }
+          } else {
+            // User has no password set (legacy or invited)
+            // For security, we should NOT allow login without password
+            // They must use the "Forgot Password" / Invite flow to set one
+            // However, for migration, if we want to allow the "empty" password trick for dev:
+            // if (credentials.password === "dev-bypass") return user // Example
+            
+            // Strict mode:
+            return null
+          }
           
           return {
             id: user.id,
