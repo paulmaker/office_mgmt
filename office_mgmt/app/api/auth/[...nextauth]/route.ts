@@ -34,6 +34,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
                   tenantAccount: {
                     select: {
                       id: true,
+                      name: true,
                     },
                   },
                 },
@@ -58,6 +59,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             name: user.name,
             role: user.role,
             entityId: user.entityId,
+            entityName: user.entity.name,
+            organizationName: user.entity?.tenantAccount?.name,
             accountId: user.entity?.tenantAccountId,
           }
         } catch (error) {
@@ -82,6 +85,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         try {
           token.role = (user as any).role
           token.entityId = (user as any).entityId
+          token.entityName = (user as any).entityName
+          token.organizationName = (user as any).organizationName
           token.accountId = (user as any).accountId
           
           // Load permissions and cache in JWT
@@ -117,6 +122,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           role?: string
           sub?: string
           entityId?: string
+          entityName?: string
+          organizationName?: string
           accountId?: string
           permissions?: string[]
         }
@@ -129,6 +136,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
         if (tokenData.entityId) {
           (session.user as any).entityId = tokenData.entityId
+        }
+        if (tokenData.entityName) {
+          (session.user as any).entityName = tokenData.entityName
+        }
+        if (tokenData.organizationName) {
+          (session.user as any).organizationName = tokenData.organizationName
         }
         if (tokenData.accountId) {
           (session.user as any).accountId = tokenData.accountId

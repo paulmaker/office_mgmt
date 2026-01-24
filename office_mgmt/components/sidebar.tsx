@@ -47,11 +47,12 @@ export function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
   const userRole = (session?.user as any)?.role
+  const organizationName = (session?.user as any)?.organizationName || 'Office Manager'
 
   return (
     <div className="flex h-full w-64 flex-col bg-gray-900">
       <div className="flex h-16 items-center px-6">
-        <h1 className="text-xl font-bold text-white">Office Manager</h1>
+        <h1 className="text-xl font-bold text-white">{organizationName}</h1>
       </div>
       <nav className="flex-1 space-y-1 px-3 py-4">
         {navigation.map((item) => {
