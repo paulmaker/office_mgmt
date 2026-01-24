@@ -33,6 +33,7 @@ export async function GET(
     }
 
     const stream = await renderToStream(
+      // @ts-ignore
       <InvoicePDF invoice={invoice} entity={invoice.entity} />
     )
 
