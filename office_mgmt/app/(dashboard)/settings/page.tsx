@@ -1,15 +1,72 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Save, Building2, Users, Bell, Database, Mail } from 'lucide-react'
+import { Save, Building2, Users, Bell, Database, Mail, Loader2 } from 'lucide-react'
+import { getSettings, updateSettings, type SettingsFormData } from '@/app/actions/settings'
+import { useToast } from '@/hooks/use-toast'
+import { useForm } from 'react-hook-form'
 
 export default function SettingsPage() {
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const { toast } = useToast()
+  
+  const { register, handleSubmit, reset, watch } = useForm<SettingsFormData>()
+
+  useEffect(() => {
+    loadSettings()
+  }, [])
+
+  const loadSettings = async () => {
+    try {
+      const data = await getSettings()
+      reset(data)
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to load settings'
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const onSubmit = async (data: SettingsFormData) => {
+    setSaving(true)
+    try {
+      await updateSettings(data)
+      toast({
+        variant: 'success',
+        title: 'Settings saved',
+        description: 'Your changes have been saved successfully.'
+      })
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to save settings'
+      })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-6">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
@@ -17,9 +74,13 @@ export default function SettingsPage() {
             Manage your account and application preferences
           </p>
         </div>
-        <Button>
-          <Save className="h-4 w-4 mr-2" />
-          Save Changes
+        <Button type="submit" disabled={saving}>
+          {saving ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <Save className="h-4 w-4 mr-2" />
+          )}
+          {saving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
 
@@ -35,58 +96,25 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="company-name">Company Name</Label>
-              <Input id="company-name" placeholder="Your Company Ltd" defaultValue="MakOps Construction" />
+              <Label htmlFor="companyName">Company Name</Label>
+              <Input id="companyName" {...register('companyName')} placeholder="Your Company Ltd" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="company-reg">Company Registration</Label>
-              <Input id="company-reg" placeholder="12345678" />
+              <Label htmlFor="companyRegistration">Company Registration</Label>
+              <Input id="companyRegistration" {...register('companyRegistration')} placeholder="12345678" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="vat-number">VAT Number</Label>
-              <Input id="vat-number" placeholder="GB123456789" />
+              <Label htmlFor="vatNumber">VAT Number</Label>
+              <Input id="vatNumber" {...register('vatNumber')} placeholder="GB123456789" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="address">Business Address</Label>
-              <Input id="address" placeholder="123 Main Street, London" />
+              <Input id="address" {...register('address')} placeholder="123 Main Street, London" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="phone">Phone Number</Label>
-              <Input id="phone" placeholder="020 1234 5678" />
+              <Input id="phone" {...register('phone')} placeholder="020 1234 5678" />
             </div>
-          </CardContent>
-        </Card>
-
-        {/* User Management */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="h-5 w-5" />
-              User Management
-            </CardTitle>
-            <CardDescription>Manage user accounts and permissions</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <p className="font-medium">Admin User</p>
-                  <p className="text-sm text-gray-500">admin@example.com</p>
-                </div>
-                <Badge variant="default">Admin</Badge>
-              </div>
-              <div className="flex items-center justify-between p-3 border rounded-lg">
-                <div>
-                  <p className="font-medium">Accountant</p>
-                  <p className="text-sm text-gray-500">accountant@example.com</p>
-                </div>
-                <Badge variant="secondary">Accountant</Badge>
-              </div>
-            </div>
-            <Button variant="outline" className="w-full">
-              <Users className="h-4 w-4 mr-2" />
-              Add User
-            </Button>
           </CardContent>
         </Card>
 
@@ -101,24 +129,24 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="timesheet-email">Timesheet Email</Label>
+              <Label htmlFor="emailTimesheets">Timesheet Email</Label>
               <Input
-                id="timesheet-email"
+                id="emailTimesheets"
                 type="email"
+                {...register('emailTimesheets')}
                 placeholder="timesheets@yourcompany.com"
-                defaultValue="timesheets@makops.co.uk"
               />
               <p className="text-xs text-gray-500">
                 Subcontractors send timesheets to this address
               </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="invoice-email">Invoice From Email</Label>
+              <Label htmlFor="emailInvoices">Invoice From Email</Label>
               <Input
-                id="invoice-email"
+                id="emailInvoices"
                 type="email"
+                {...register('emailInvoices')}
                 placeholder="invoices@yourcompany.com"
-                defaultValue="invoices@makops.co.uk"
               />
               <p className="text-xs text-gray-500">
                 Invoices will be sent from this address
@@ -149,35 +177,35 @@ export default function SettingsPage() {
                 <p className="font-medium">Invoice Overdue</p>
                 <p className="text-sm text-gray-500">Get notified when invoices become overdue</p>
               </div>
-              <input type="checkbox" className="h-4 w-4" defaultChecked />
+              <input type="checkbox" className="h-4 w-4" {...register('notifyInvoiceOverdue')} />
             </div>
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium">Timesheet Submissions</p>
                 <p className="text-sm text-gray-500">Notify on new timesheet submissions</p>
               </div>
-              <input type="checkbox" className="h-4 w-4" defaultChecked />
+              <input type="checkbox" className="h-4 w-4" {...register('notifyTimesheetSubmission')} />
             </div>
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium">Vehicle Reminders</p>
                 <p className="text-sm text-gray-500">MOT, tax, and insurance due dates</p>
               </div>
-              <input type="checkbox" className="h-4 w-4" defaultChecked />
+              <input type="checkbox" className="h-4 w-4" {...register('notifyVehicleReminders')} />
             </div>
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium">CIS Return Reminder</p>
                 <p className="text-sm text-gray-500">Monthly CIS return deadline</p>
               </div>
-              <input type="checkbox" className="h-4 w-4" defaultChecked />
+              <input type="checkbox" className="h-4 w-4" {...register('notifyCisReturn')} />
             </div>
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium">VAT Return Reminder</p>
                 <p className="text-sm text-gray-500">Quarterly VAT return deadline</p>
               </div>
-              <input type="checkbox" className="h-4 w-4" defaultChecked />
+              <input type="checkbox" className="h-4 w-4" {...register('notifyVatReturn')} />
             </div>
           </CardContent>
         </Card>
@@ -193,25 +221,16 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Verified Net Rate</Label>
-              <div className="flex items-center gap-2">
-                <Input type="number" defaultValue="20" className="w-24" />
-                <span className="text-sm text-gray-500">%</span>
-              </div>
+              <Label>Verified Net Rate (%)</Label>
+              <Input type="number" {...register('cisVerifiedNetRate')} />
             </div>
             <div className="space-y-2">
-              <Label>Not Verified Rate</Label>
-              <div className="flex items-center gap-2">
-                <Input type="number" defaultValue="30" className="w-24" />
-                <span className="text-sm text-gray-500">%</span>
-              </div>
+              <Label>Not Verified Rate (%)</Label>
+              <Input type="number" {...register('cisNotVerifiedRate')} />
             </div>
             <div className="space-y-2">
-              <Label>Verified Gross Rate</Label>
-              <div className="flex items-center gap-2">
-                <Input type="number" defaultValue="0" className="w-24" />
-                <span className="text-sm text-gray-500">%</span>
-              </div>
+              <Label>Verified Gross Rate (%)</Label>
+              <Input type="number" {...register('cisVerifiedGrossRate')} />
             </div>
           </CardContent>
         </Card>
@@ -224,29 +243,23 @@ export default function SettingsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label>Standard VAT Rate</Label>
-              <div className="flex items-center gap-2">
-                <Input type="number" defaultValue="20" className="w-24" />
-                <span className="text-sm text-gray-500">%</span>
-              </div>
+              <Label>Standard VAT Rate (%)</Label>
+              <Input type="number" {...register('vatStandardRate')} />
             </div>
             <div className="space-y-2">
-              <Label>Reduced VAT Rate</Label>
-              <div className="flex items-center gap-2">
-                <Input type="number" defaultValue="5" className="w-24" />
-                <span className="text-sm text-gray-500">%</span>
-              </div>
+              <Label>Reduced VAT Rate (%)</Label>
+              <Input type="number" {...register('vatReducedRate')} />
             </div>
             <div className="flex items-center justify-between">
               <div>
                 <p className="font-medium">VAT Registered</p>
                 <p className="text-sm text-gray-500">Is your company VAT registered?</p>
               </div>
-              <input type="checkbox" className="h-4 w-4" defaultChecked />
+              <input type="checkbox" className="h-4 w-4" {...register('isVatRegistered')} />
             </div>
           </CardContent>
         </Card>
       </div>
-    </div>
+    </form>
   )
 }
