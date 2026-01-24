@@ -47,7 +47,7 @@ export function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
   const userRole = (session?.user as any)?.role
-  const organizationName = (session?.user as any)?.organizationName || 'Office Manager'
+  const organizationName = 'Office Manager'
 
   return (
     <div className="flex h-full w-64 flex-col bg-gray-900">
