@@ -6,8 +6,8 @@ import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
 
 /**
  * Generate invoice number for a client
- * Format: {REFERENCE_CODE}{NUMBER}
- * Example: BS1, CC12, LU123
+ * Format: {REFERENCE_CODE}_{NUMBER}
+ * Example: CC1_00001, CC1_00002, BS12_00001
  */
 export async function generateInvoiceNumber(clientId: string): Promise<string> {
   const session = await auth()
@@ -24,19 +24,18 @@ export async function generateInvoiceNumber(clientId: string): Promise<string> {
     throw new Error('Client not found')
   }
 
-  if (!client.referenceCode) {
+  if (!client.referenceCode || client.referenceCode.trim() === '') {
     throw new Error('Client does not have a reference code. Please set one in client settings.')
   }
 
-  // Extract prefix (2 letters) from reference code - ignore any numbers
-  // Examples: "BS" -> prefix="BS" | "BS1" -> prefix="BS" | "CC12" -> prefix="CC"
-  const refCode = client.referenceCode.toUpperCase()
-  const match = refCode.match(/^([A-Z]{2})/)
-  if (!match) {
-    throw new Error('Client reference code must start with 2 letters (e.g., BS, BS1, CC12)')
+  // Use the full reference code as the prefix (e.g., "CC1", "BS12", "CC2")
+  // Invoice numbers will be: CC11, CC12, CC13... or BS121, BS122, BS123...
+  const prefix = client.referenceCode.toUpperCase().trim()
+  
+  // Validate format: 2 letters followed by at least one number
+  if (!/^[A-Z]{2}\d+$/.test(prefix)) {
+    throw new Error(`Client reference code "${client.referenceCode}" must be 2 letters followed by a number (e.g., CC1, BS12, CC2)`)
   }
-
-  const prefix = match[1] // Extract just the 2 letters for invoice prefix
 
   // Get or create InvoiceCode record for this client
   let invoiceCode = await prisma.invoiceCode.findUnique({
@@ -70,9 +69,10 @@ export async function generateInvoiceNumber(clientId: string): Promise<string> {
     },
   })
 
-  // Format: PREFIX + NUMBER (no underscore, no padding)
-  // Example: BS1, CC12, LU123
-  return `${updated.prefix}${updated.lastNumber}`
+  // Format: REFERENCE_CODE_NUMBER (with underscore, 5-digit padding)
+  // Example: CC1_00001, CC1_00002, BS12_00001
+  const paddedNumber = updated.lastNumber.toString().padStart(5, '0')
+  return `${updated.prefix}_${paddedNumber}`
 }
 
 /**
@@ -100,6 +100,7 @@ export async function getCurrentInvoiceNumber(clientId: string): Promise<string 
     return null
   }
 
-  // Format: PREFIX + NUMBER (no underscore, no padding)
-  return `${invoiceCode.prefix}${invoiceCode.lastNumber}`
+  // Format: REFERENCE_CODE_NUMBER (with underscore, 5-digit padding)
+  const paddedNumber = invoiceCode.lastNumber.toString().padStart(5, '0')
+  return `${invoiceCode.prefix}_${paddedNumber}`
 }

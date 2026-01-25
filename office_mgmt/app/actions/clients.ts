@@ -126,12 +126,13 @@ export async function createClient(data: {
   // Auto-generate reference code if not provided, or validate if provided
   let referenceCode = data.referenceCode?.toUpperCase().trim()
   if (!referenceCode) {
-    // Auto-generate exactly 2 letters (no number)
-    referenceCode = generateReferenceCode(data.name, data.companyName)
+    // Auto-generate 2 letters + number (e.g., CC1, BS12)
+    const basePrefix = generateReferenceCode(data.name, data.companyName)
     
-    // Ensure uniqueness by trying variations if needed
-    let finalCode = referenceCode
-    let counter = 1
+    // Find the next available number for this prefix
+    let number = 1
+    let finalCode = `${basePrefix}${number}`
+    
     while (true) {
       const existing = await prisma.client.findFirst({
         where: {
@@ -144,18 +145,20 @@ export async function createClient(data: {
         break
       }
       
-      // If code exists, try variations like BA, BB, BC if AA exists
-      if (counter > 26) {
+      // Try next number
+      number++
+      finalCode = `${basePrefix}${number}`
+      
+      // Safety limit
+      if (number > 9999) {
         throw new Error('Unable to generate unique reference code. Please specify one manually.')
       }
-      finalCode = referenceCode.charAt(0) + String.fromCharCode(65 + (counter % 26))
-      counter++
     }
     referenceCode = finalCode
   } else {
-    // Validate format: 2 uppercase letters followed by optional numbers
-    if (!/^[A-Z]{2}\d*$/.test(referenceCode)) {
-      throw new Error('Reference code must be 2 uppercase letters followed by optional numbers (e.g., BS, BS1, CC12)')
+    // Validate format: 2 uppercase letters followed by at least one number
+    if (!/^[A-Z]{2}\d+$/.test(referenceCode)) {
+      throw new Error('Reference code must be 2 uppercase letters followed by a number (e.g., CC1, BS12, CC2)')
     }
     
     // Check if provided reference code is unique
@@ -266,9 +269,9 @@ export async function updateClient(
   if (data.referenceCode) {
     validatedReferenceCode = data.referenceCode.toUpperCase().trim()
     
-    // Validate format: 2 uppercase letters followed by optional numbers
-    if (!/^[A-Z]{2}\d*$/.test(validatedReferenceCode)) {
-      throw new Error('Reference code must be 2 uppercase letters followed by optional numbers (e.g., BS, BS1, CC12)')
+    // Validate format: 2 uppercase letters followed by at least one number
+    if (!/^[A-Z]{2}\d+$/.test(validatedReferenceCode)) {
+      throw new Error('Reference code must be 2 uppercase letters followed by a number (e.g., CC1, BS12, CC2)')
     }
     
     // Only check uniqueness if it's different from current
@@ -309,11 +312,11 @@ export async function updateClient(
 
   // If reference code changed, update the InvoiceCode record prefix
   // Note: We don't reset lastNumber - invoices already generated should keep their numbers
-  if (validatedReferenceCode !== existingClient.referenceCode) {
+  if (validatedReferenceCode && validatedReferenceCode !== existingClient.referenceCode) {
     const refCode = validatedReferenceCode.toUpperCase()
-    const match = refCode.match(/^([A-Z]{2})(\d*)$/)
+    const match = refCode.match(/^([A-Z]{2})\d+$/)
     if (match) {
-      const prefix = match[1]
+      const prefix = refCode // Use full reference code as prefix
       
       // Update or create InvoiceCode record (only update prefix, keep lastNumber)
       await prisma.invoiceCode.upsert({

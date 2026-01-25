@@ -150,14 +150,18 @@ export function ClientForm({ client, onSuccess, onCancel }: ClientFormProps) {
                 id="referenceCode"
                 {...register('referenceCode', {
                   pattern: {
-                    value: /^[A-Z]{2}\d*$/,
-                    message: 'Reference code must be 2 uppercase letters followed by optional numbers (e.g., BS, BS1, CC12)',
+                    value: /^[A-Z]{2}\d+$/,
+                    message: 'Reference code must be 2 uppercase letters followed by a number (e.g., CC1, BS12, CC2)',
+                  },
+                  required: {
+                    value: false,
+                    message: 'Reference code is optional but if provided must be 2 letters + number',
                   },
                 })}
-                placeholder="BS, BS1, CC12"
+                placeholder="CC1, BS12, CC2"
                 className="uppercase"
                 onInput={(e) => {
-                  // Allow letters and numbers, ensure starts with 2 letters
+                  // Allow letters and numbers, ensure starts with 2 letters followed by numbers
                   const input = e.currentTarget
                   let value = input.value.toUpperCase()
                   // Remove any non-alphanumeric characters
@@ -178,7 +182,7 @@ export function ClientForm({ client, onSuccess, onCancel }: ClientFormProps) {
                 <p className="text-sm text-red-500">{errors.referenceCode.message}</p>
               )}
               <p className="text-xs text-gray-500">
-                Enter 2 letters followed by optional starting number (e.g., BS, BS1, CC12). If left empty, will auto-generate.
+                Enter 2 letters followed by a number (e.g., CC1, BS12, CC2). If left empty, will auto-generate.
               </p>
             </div>
 
