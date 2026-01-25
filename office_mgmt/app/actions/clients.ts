@@ -243,8 +243,14 @@ export async function updateClient(
     throw new Error('You do not have permission to update this client')
   }
 
-  // Validate reference code uniqueness if being changed
+  // Validate reference code format and uniqueness if being changed
   if (data.referenceCode && data.referenceCode !== existingClient.referenceCode) {
+    // Validate format: 1-3 uppercase letters followed by 6 digits
+    const formatRegex = /^[A-Z]{1,3}\d{6}$/
+    if (!formatRegex.test(data.referenceCode)) {
+      throw new Error('Reference code must be 1-3 uppercase letters followed by 6 digits (e.g., BS000001)')
+    }
+    
     const existing = await prisma.client.findFirst({
       where: {
         entityId: existingClient.entityId,

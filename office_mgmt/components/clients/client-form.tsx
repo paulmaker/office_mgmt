@@ -150,8 +150,8 @@ export function ClientForm({ client, onSuccess, onCancel }: ClientFormProps) {
                 id="referenceCode"
                 {...register('referenceCode', {
                   pattern: {
-                    value: /^[A-Z0-9]{1,5}$/,
-                    message: 'Reference code must be 1-5 uppercase letters/numbers',
+                    value: /^[A-Z]{1,3}\d{6}$/,
+                    message: 'Reference code must be 1-3 uppercase letters followed by 6 digits (e.g., BS000001)',
                   },
                 })}
                 placeholder="Auto-generated if left empty"
@@ -161,7 +161,7 @@ export function ClientForm({ client, onSuccess, onCancel }: ClientFormProps) {
                 <p className="text-sm text-red-500">{errors.referenceCode.message}</p>
               )}
               <p className="text-xs text-gray-500">
-                Used for generating invoice codes (e.g., LU_00001)
+                Format: Base code (1-3 letters) + 6-digit number (e.g., BS000001). Auto-generated if left empty.
               </p>
             </div>
 
