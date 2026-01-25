@@ -1,18 +1,23 @@
-import { auth } from "@/app/api/auth/[...nextauth]/route"
 import { NextResponse } from "next/server"
+import type { NextRequest } from "next/server"
 
-export default auth((request) => {
-
+// Lightweight middleware - checks for auth cookie without importing Prisma/auth
+// This keeps the Edge Function bundle size under 1MB
+export default function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
-  const isLoggedIn = !!request.auth
-
+  
   // Public routes
   if (pathname.startsWith("/login") || pathname.startsWith("/api/auth")) {
     return NextResponse.next()
   }
 
+  // Check for NextAuth session cookie (JWT strategy)
+  // NextAuth v5 uses 'authjs.session-token' cookie name
+  const sessionToken = request.cookies.get('authjs.session-token') || 
+                       request.cookies.get('__Secure-authjs.session-token')
+
   // Redirect unauthenticated users to login
-  if (!isLoggedIn) {
+  if (!sessionToken) {
     return NextResponse.redirect(new URL("/login", request.url))
   }
 
@@ -21,16 +26,11 @@ export default auth((request) => {
     return NextResponse.redirect(new URL("/dashboard", request.url))
   }
 
-  // Admin routes - check role
-  if (pathname.startsWith("/admin")) {
-    const role = (request.auth?.user as any)?.role
-    if (!role || !['PLATFORM_ADMIN', 'ACCOUNT_ADMIN', 'ENTITY_ADMIN'].includes(role)) {
-      return NextResponse.redirect(new URL("/dashboard", request.url))
-    }
-  }
+  // Note: Admin role check removed from middleware to reduce bundle size
+  // Admin routes are protected by server actions and layout checks instead
 
   return NextResponse.next()
-})
+}
 
 export const config = {
   matcher: [
