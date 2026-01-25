@@ -1,7 +1,5 @@
 import { auth } from "@/app/api/auth/[...nextauth]/route"
 import { NextResponse } from "next/server"
-import type { NextRequest } from "next/server"
-import { ROUTE_TO_MODULE, type ModuleKey } from "@/lib/module-access"
 
 export default auth((req) => {
   const { pathname } = req.nextUrl
@@ -19,26 +17,18 @@ export default auth((req) => {
     return NextResponse.next()
   }
 
-  // Protect dashboard routes
-  if (pathname.startsWith('/dashboard') || pathname.startsWith('/admin') || pathname.startsWith('/settings')) {
+  // Protect dashboard routes - only basic auth check here
+  // Module access checks are handled in the layout to keep middleware lightweight
+  if (pathname.startsWith('/dashboard') || pathname.startsWith('/admin') || pathname.startsWith('/settings') || 
+      pathname.startsWith('/clients') || pathname.startsWith('/subcontractors') || pathname.startsWith('/employees') ||
+      pathname.startsWith('/suppliers') || pathname.startsWith('/jobs') || pathname.startsWith('/job-prices') ||
+      pathname.startsWith('/invoices') || pathname.startsWith('/timesheets') || pathname.startsWith('/payroll') ||
+      pathname.startsWith('/banking') || pathname.startsWith('/reports') || pathname.startsWith('/assets') ||
+      pathname.startsWith('/quick-links')) {
     if (!session) {
       const loginUrl = new URL('/login', req.url)
       loginUrl.searchParams.set('callbackUrl', pathname)
       return NextResponse.redirect(loginUrl)
-    }
-  }
-
-  // Check module access for specific routes
-  if (session?.user) {
-    const enabledModules = (session.user as any)?.enabledModules || []
-    const module = ROUTE_TO_MODULE[pathname]
-
-    // If this route requires a module and the module is not enabled, redirect
-    if (module && !enabledModules.includes(module)) {
-      // Redirect to dashboard with a message
-      const dashboardUrl = new URL('/dashboard', req.url)
-      dashboardUrl.searchParams.set('error', 'module_disabled')
-      return NextResponse.redirect(dashboardUrl)
     }
   }
 
