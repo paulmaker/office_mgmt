@@ -123,45 +123,48 @@ export async function createClient(data: {
     throw new Error('User entity not found')
   }
 
-  // Auto-generate reference code if not provided
-  let referenceCode = data.referenceCode
+  // Auto-generate reference code if not provided, or validate if provided
+  let referenceCode = data.referenceCode?.toUpperCase().trim()
   if (!referenceCode) {
-    const baseCode = generateReferenceCode(data.name, data.companyName)
+    // Auto-generate exactly 2 letters
+    referenceCode = generateReferenceCode(data.name, data.companyName)
     
-    // Always append a 6-digit number, starting from 000001
-    // Find the highest number for this base code in this entity
-    const existingCodes = await prisma.client.findMany({
-      where: {
-        entityId: userEntity.entityId,
-        referenceCode: {
-          startsWith: baseCode,
+    // Ensure uniqueness by appending a number if needed
+    let finalCode = referenceCode
+    let counter = 1
+    while (true) {
+      const existing = await prisma.client.findFirst({
+        where: {
+          entityId: userEntity.entityId,
+          referenceCode: finalCode,
         },
-      },
-      select: {
-        referenceCode: true,
-      },
-    })
-    
-    // Extract numbers from existing codes (e.g., "CC000001" -> 1, "CC000002" -> 2)
-    const numbers = existingCodes
-      .map(c => {
-        // Match base code followed by 6 digits
-        const match = c.referenceCode?.match(new RegExp(`^${baseCode}(\\d{6})$`))
-        return match ? parseInt(match[1], 10) : 0
       })
-      .filter(n => n > 0)
-    
-    // Get next number (highest + 1, or 1 if none exist)
-    const nextNumber = numbers.length > 0 ? Math.max(...numbers) + 1 : 1
-    // Pad to 6 digits
-    const paddedNumber = nextNumber.toString().padStart(6, '0')
-    referenceCode = `${baseCode}${paddedNumber}`
+      
+      if (!existing) {
+        break
+      }
+      
+      // If code exists, try appending a number (but this shouldn't happen with 2-letter codes)
+      // Actually, if it exists, we should just use it or throw an error
+      // For now, let's try variations like BA, BB, BC if AA exists
+      if (counter > 26) {
+        throw new Error('Unable to generate unique reference code. Please specify one manually.')
+      }
+      finalCode = referenceCode.charAt(0) + String.fromCharCode(65 + (counter % 26))
+      counter++
+    }
+    referenceCode = finalCode
   } else {
+    // Validate format: exactly 2 uppercase letters
+    if (!/^[A-Z]{2}$/.test(referenceCode)) {
+      throw new Error('Reference code must be exactly 2 uppercase letters (e.g., BS, CC, LU)')
+    }
+    
     // Check if provided reference code is unique
     const existing = await prisma.client.findFirst({
       where: {
         entityId: userEntity.entityId,
-        referenceCode: data.referenceCode,
+        referenceCode: referenceCode,
       },
     })
     
@@ -244,23 +247,28 @@ export async function updateClient(
   }
 
   // Validate reference code format and uniqueness if being changed
-  if (data.referenceCode && data.referenceCode !== existingClient.referenceCode) {
-    // Validate format: 1-3 uppercase letters followed by 6 digits
-    const formatRegex = /^[A-Z]{1,3}\d{6}$/
-    if (!formatRegex.test(data.referenceCode)) {
-      throw new Error('Reference code must be 1-3 uppercase letters followed by 6 digits (e.g., BS000001)')
+  let validatedReferenceCode = existingClient.referenceCode
+  if (data.referenceCode) {
+    validatedReferenceCode = data.referenceCode.toUpperCase().trim()
+    
+    // Validate format: exactly 2 uppercase letters
+    if (!/^[A-Z]{2}$/.test(validatedReferenceCode)) {
+      throw new Error('Reference code must be exactly 2 uppercase letters (e.g., BS, CC, LU)')
     }
     
-    const existing = await prisma.client.findFirst({
-      where: {
-        entityId: existingClient.entityId,
-        referenceCode: data.referenceCode,
-        id: { not: id },
-      },
-    })
-    
-    if (existing) {
-      throw new Error('Reference code already exists for another client in this entity')
+    // Only check uniqueness if it's different from current
+    if (validatedReferenceCode !== existingClient.referenceCode) {
+      const existing = await prisma.client.findFirst({
+        where: {
+          entityId: existingClient.entityId,
+          referenceCode: validatedReferenceCode,
+          id: { not: id },
+        },
+      })
+      
+      if (existing) {
+        throw new Error('Reference code already exists for another client in this entity')
+      }
     }
   }
 
@@ -278,7 +286,7 @@ export async function updateClient(
       vatRegistered: data.vatRegistered,
       cisRegistered: data.cisRegistered,
       paymentTerms: data.paymentTerms,
-      referenceCode: data.referenceCode,
+      referenceCode: validatedReferenceCode,
       ratesConfig: data.ratesConfig,
       notes: data.notes,
     },

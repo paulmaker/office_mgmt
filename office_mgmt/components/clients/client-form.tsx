@@ -150,18 +150,23 @@ export function ClientForm({ client, onSuccess, onCancel }: ClientFormProps) {
                 id="referenceCode"
                 {...register('referenceCode', {
                   pattern: {
-                    value: /^[A-Z]{1,3}\d{6}$/,
-                    message: 'Reference code must be 1-3 uppercase letters followed by 6 digits (e.g., BS000001)',
+                    value: /^[A-Z]{2}$/,
+                    message: 'Reference code must be exactly 2 uppercase letters (e.g., BS, CC, LU)',
+                  },
+                  maxLength: {
+                    value: 2,
+                    message: 'Reference code must be exactly 2 letters',
                   },
                 })}
-                placeholder="Auto-generated if left empty"
+                placeholder="BS, CC, LU"
                 className="uppercase"
+                maxLength={2}
               />
               {errors.referenceCode && (
                 <p className="text-sm text-red-500">{errors.referenceCode.message}</p>
               )}
               <p className="text-xs text-gray-500">
-                Format: Base code (1-3 letters) + 6-digit number (e.g., BS000001). Auto-generated if left empty.
+                Exactly 2 letters (e.g., BS, CC, LU). Invoice numbers will be formatted as BS1, CC12, etc.
               </p>
             </div>
 

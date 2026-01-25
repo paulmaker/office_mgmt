@@ -87,8 +87,9 @@ export function getJobStatusColor(status: string): string {
 
 /**
  * Generate a reference code from a name
+ * Always returns exactly 2 uppercase letters
  * Takes first letters of words (prefer company name, fallback to name)
- * Example: "Luxury Homes" -> "LU", "ABC Company" -> "ABC", "John Smith" -> "JS"
+ * Example: "Luxury Homes" -> "LU", "ABC Company" -> "AB", "John Smith" -> "JS"
  */
 export function generateReferenceCode(name: string, companyName?: string | null): string {
   const source = (companyName || name).trim()
@@ -104,10 +105,10 @@ export function generateReferenceCode(name: string, companyName?: string | null)
     return !['the', 'and', 'of', 'for', 'ltd', 'limited', 'llc', 'inc', 'incorporated'].includes(lower)
   })
   
-  // If we have words, take first letter of each (up to 3 words)
+  // If we have words, take first letter of each (up to 2 words for 2-letter code)
   if (words.length >= 1) {
     const code = words
-      .slice(0, 3) // Take up to 3 words
+      .slice(0, 2) // Take up to 2 words for 2-letter code
       .map(word => {
         // Get first uppercase letter, or first letter if no uppercase
         const upperMatch = word.match(/[A-Z]/)
@@ -119,9 +120,9 @@ export function generateReferenceCode(name: string, companyName?: string | null)
       })
       .join('')
     
-    // Ensure we have at least 2 characters
+    // If we have 2 characters, return them
     if (code.length >= 2) {
-      return code.substring(0, 3) // Max 3 characters
+      return code.substring(0, 2) // Exactly 2 characters
     }
     
     // If only 1 character, pad with second letter of first word or second word
@@ -133,19 +134,26 @@ export function generateReferenceCode(name: string, companyName?: string | null)
       if (words.length > 1) {
         return code + words[1].charAt(0).toUpperCase()
       }
+      // If still only 1 character, duplicate it
+      return code + code
     }
   }
   
-  // Fallback: take first 2-3 uppercase letters from the source
+  // Fallback: take first 2 uppercase letters from the source
   const upperLetters = source.match(/[A-Z]/g)
   if (upperLetters && upperLetters.length >= 2) {
-    return upperLetters.slice(0, 3).join('')
+    return upperLetters.slice(0, 2).join('')
   }
   
   // Final fallback: first 2 characters, uppercase
   const cleaned = source.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
   if (cleaned.length >= 2) {
     return cleaned.substring(0, 2)
+  }
+  
+  // If we still don't have 2 characters, pad with 'X' or duplicate
+  if (cleaned.length === 1) {
+    return cleaned + 'X'
   }
   
   return 'CL' // Ultimate fallback

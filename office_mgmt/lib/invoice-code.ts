@@ -6,8 +6,8 @@ import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
 
 /**
  * Generate invoice number for a client
- * Format: {REFERENCE_CODE}_{NUMBER}
- * Example: LU_00001, ABC_00002
+ * Format: {REFERENCE_CODE}{NUMBER}
+ * Example: BS1, CC12, LU123
  */
 export async function generateInvoiceNumber(clientId: string): Promise<string> {
   const session = await auth()
@@ -28,6 +28,11 @@ export async function generateInvoiceNumber(clientId: string): Promise<string> {
     throw new Error('Client does not have a reference code. Please set one in client settings.')
   }
 
+  // Validate reference code is exactly 2 letters
+  if (!/^[A-Z]{2}$/i.test(client.referenceCode)) {
+    throw new Error('Client reference code must be exactly 2 letters (e.g., BS, CC, LU)')
+  }
+
   // Get or create InvoiceCode record for this client
   let invoiceCode = await prisma.invoiceCode.findUnique({
     where: {
@@ -44,7 +49,7 @@ export async function generateInvoiceNumber(clientId: string): Promise<string> {
       data: {
         entityId: client.entityId,
         clientId: client.id,
-        prefix: client.referenceCode,
+        prefix: client.referenceCode.toUpperCase(),
         lastNumber: 0,
       },
     })
@@ -60,9 +65,9 @@ export async function generateInvoiceNumber(clientId: string): Promise<string> {
     },
   })
 
-  // Format: PREFIX_00001 (5 digits)
-  const number = updated.lastNumber.toString().padStart(5, '0')
-  return `${updated.prefix}_${number}`
+  // Format: PREFIX + NUMBER (no underscore, no padding)
+  // Example: BS1, CC12, LU123
+  return `${updated.prefix}${updated.lastNumber}`
 }
 
 /**
@@ -90,6 +95,6 @@ export async function getCurrentInvoiceNumber(clientId: string): Promise<string 
     return null
   }
 
-  const number = invoiceCode.lastNumber.toString().padStart(5, '0')
-  return `${invoiceCode.prefix}_${number}`
+  // Format: PREFIX + NUMBER (no underscore, no padding)
+  return `${invoiceCode.prefix}${invoiceCode.lastNumber}`
 }
