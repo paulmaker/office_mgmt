@@ -28,10 +28,15 @@ export async function generateInvoiceNumber(clientId: string): Promise<string> {
     throw new Error('Client does not have a reference code. Please set one in client settings.')
   }
 
-  // Validate reference code is exactly 2 letters
-  if (!/^[A-Z]{2}$/i.test(client.referenceCode)) {
-    throw new Error('Client reference code must be exactly 2 letters (e.g., BS, CC, LU)')
+  // Extract prefix (2 letters) from reference code - ignore any numbers
+  // Examples: "BS" -> prefix="BS" | "BS1" -> prefix="BS" | "CC12" -> prefix="CC"
+  const refCode = client.referenceCode.toUpperCase()
+  const match = refCode.match(/^([A-Z]{2})/)
+  if (!match) {
+    throw new Error('Client reference code must start with 2 letters (e.g., BS, BS1, CC12)')
   }
+
+  const prefix = match[1] // Extract just the 2 letters for invoice prefix
 
   // Get or create InvoiceCode record for this client
   let invoiceCode = await prisma.invoiceCode.findUnique({
@@ -49,7 +54,7 @@ export async function generateInvoiceNumber(clientId: string): Promise<string> {
       data: {
         entityId: client.entityId,
         clientId: client.id,
-        prefix: client.referenceCode.toUpperCase(),
+        prefix: prefix,
         lastNumber: 0,
       },
     })

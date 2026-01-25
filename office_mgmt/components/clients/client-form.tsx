@@ -150,23 +150,35 @@ export function ClientForm({ client, onSuccess, onCancel }: ClientFormProps) {
                 id="referenceCode"
                 {...register('referenceCode', {
                   pattern: {
-                    value: /^[A-Z]{2}$/,
-                    message: 'Reference code must be exactly 2 uppercase letters (e.g., BS, CC, LU)',
-                  },
-                  maxLength: {
-                    value: 2,
-                    message: 'Reference code must be exactly 2 letters',
+                    value: /^[A-Z]{2}\d*$/,
+                    message: 'Reference code must be 2 uppercase letters followed by optional numbers (e.g., BS, BS1, CC12)',
                   },
                 })}
-                placeholder="BS, CC, LU"
+                placeholder="BS, BS1, CC12"
                 className="uppercase"
-                maxLength={2}
+                onInput={(e) => {
+                  // Allow letters and numbers, ensure starts with 2 letters
+                  const input = e.currentTarget
+                  let value = input.value.toUpperCase()
+                  // Remove any non-alphanumeric characters
+                  value = value.replace(/[^A-Z0-9]/g, '')
+                  // Ensure it starts with at least 2 letters
+                  const letterMatch = value.match(/^[A-Z]{2,}/)
+                  if (letterMatch) {
+                    const letters = letterMatch[0].substring(0, 2) // Take first 2 letters
+                    const numbers = value.substring(letterMatch[0].length).replace(/[^0-9]/g, '')
+                    input.value = letters + numbers
+                  } else {
+                    // If less than 2 letters, only allow letters
+                    input.value = value.replace(/[^A-Z]/g, '').substring(0, 2)
+                  }
+                }}
               />
               {errors.referenceCode && (
                 <p className="text-sm text-red-500">{errors.referenceCode.message}</p>
               )}
               <p className="text-xs text-gray-500">
-                Exactly 2 letters (e.g., BS, CC, LU). Invoice numbers will be formatted as BS1, CC12, etc.
+                Enter 2 letters followed by optional starting number (e.g., BS, BS1, CC12). If left empty, will auto-generate.
               </p>
             </div>
 
