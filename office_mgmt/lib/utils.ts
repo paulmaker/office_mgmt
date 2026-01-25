@@ -12,6 +12,11 @@ export function formatCurrency(amount: number): string {
   }).format(amount)
 }
 
+/** ASCII-only currency for CSV exports; avoids "Â£" when Excel uses wrong encoding */
+export function formatCurrencyForCSV(amount: number): string {
+  return `${amount.toFixed(2)} GBP`
+}
+
 export function formatDate(date: Date | string): string {
   const d = typeof date === 'string' ? new Date(date) : date
   return new Intl.DateTimeFormat('en-GB', {

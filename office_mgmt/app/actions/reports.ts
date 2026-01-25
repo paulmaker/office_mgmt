@@ -5,7 +5,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
 import { getAccessibleEntityIds } from '@/lib/platform-core/multi-tenancy'
 import { requireModule } from '@/lib/module-access'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrencyForCSV, formatDate } from '@/lib/utils'
 import { startOfMonth, subMonths, format, endOfMonth } from 'date-fns'
 
 /**
@@ -114,13 +114,13 @@ export async function exportProfitAndLoss(startDate?: Date, endDate?: Date) {
 
   const headers = ['Item', 'Amount']
   const rows = [
-    ['Revenue (Sales)', formatCurrency(totalRevenue)],
-    ['Direct Costs (Purchases)', formatCurrency(purchaseExpenses._sum.total || 0)],
-    ['Direct Costs (Timesheets)', formatCurrency(timesheetExpenses._sum.grossAmount || 0)],
-    ['Total Direct Costs', formatCurrency(totalExpenses)],
-    ['Gross Profit', formatCurrency(netProfit)],
-    ['Operating Expenses', formatCurrency(0)],
-    ['Net Profit', formatCurrency(netProfit)],
+    ['Revenue (Sales)', formatCurrencyForCSV(totalRevenue)],
+    ['Direct Costs (Purchases)', formatCurrencyForCSV(purchaseExpenses._sum.total || 0)],
+    ['Direct Costs (Timesheets)', formatCurrencyForCSV(timesheetExpenses._sum.grossAmount || 0)],
+    ['Total Direct Costs', formatCurrencyForCSV(totalExpenses)],
+    ['Gross Profit', formatCurrencyForCSV(netProfit)],
+    ['Operating Expenses', formatCurrencyForCSV(0)],
+    ['Net Profit', formatCurrencyForCSV(netProfit)],
     ['Profit Margin (%)', `${profitMargin}%`]
   ]
 
@@ -181,9 +181,9 @@ export async function exportVATSummary(startDate?: Date, endDate?: Date) {
 
   // Add summary row
   rows.push(['SUMMARY', '', '', '', '', ''])
-  rows.push(['Output VAT (Sales)', '', '', '', '', formatCurrency(totalOutputVAT)])
-  rows.push(['Input VAT (Purchases)', '', '', '', '', formatCurrency(totalInputVAT)])
-  rows.push(['VAT to Pay/Reclaim', '', '', '', '', formatCurrency(vatToPay)])
+  rows.push(['Output VAT (Sales)', '', '', '', '', formatCurrencyForCSV(totalOutputVAT)])
+  rows.push(['Input VAT (Purchases)', '', '', '', '', formatCurrencyForCSV(totalInputVAT)])
+  rows.push(['VAT to Pay/Reclaim', '', '', '', '', formatCurrencyForCSV(vatToPay)])
   rows.push(['', '', '', '', '', ''])
 
   // Add sales invoices
@@ -195,8 +195,8 @@ export async function exportVATSummary(startDate?: Date, endDate?: Date) {
       inv.invoiceNumber,
       formatDate(inv.date),
       customerName,
-      formatCurrency(inv.total),
-      formatCurrency(inv.vatAmount || 0)
+      formatCurrencyForCSV(inv.total),
+      formatCurrencyForCSV(inv.vatAmount || 0)
     ])
   })
 
@@ -211,8 +211,8 @@ export async function exportVATSummary(startDate?: Date, endDate?: Date) {
       inv.invoiceNumber,
       formatDate(inv.date),
       supplierName,
-      formatCurrency(inv.total),
-      formatCurrency(inv.vatAmount || 0)
+      formatCurrencyForCSV(inv.total),
+      formatCurrencyForCSV(inv.vatAmount || 0)
     ])
   })
 
@@ -258,7 +258,7 @@ export async function exportCISDeductions(startDate?: Date, endDate?: Date) {
 
   // Add summary
   rows.push(['SUMMARY', '', '', '', '', ''])
-  rows.push(['Total CIS Deducted', '', '', formatCurrency(totalCISDeductions), '', ''])
+  rows.push(['Total CIS Deducted', '', '', formatCurrencyForCSV(totalCISDeductions), '', ''])
   rows.push(['Number of Timesheets', '', '', timesheets.length.toString(), '', ''])
   rows.push(['', '', '', '', '', ''])
 
@@ -272,9 +272,9 @@ export async function exportCISDeductions(startDate?: Date, endDate?: Date) {
     rows.push([
       formatDate(ts.periodEnd),
       subcontractorName,
-      formatCurrency(ts.grossAmount),
-      formatCurrency(ts.cisDeduction),
-      formatCurrency(netAmount),
+      formatCurrencyForCSV(ts.grossAmount),
+      formatCurrencyForCSV(ts.cisDeduction),
+      formatCurrencyForCSV(netAmount),
       `${cisRate}%`
     ])
   })
@@ -381,9 +381,9 @@ export async function exportCashFlow(startDate?: Date, endDate?: Date) {
     totalExpenses += month.expenses
     rows.push([
       month.month,
-      formatCurrency(month.revenue),
-      formatCurrency(month.expenses),
-      formatCurrency(net)
+      formatCurrencyForCSV(month.revenue),
+      formatCurrencyForCSV(month.expenses),
+      formatCurrencyForCSV(net)
     ])
   })
 
@@ -391,9 +391,9 @@ export async function exportCashFlow(startDate?: Date, endDate?: Date) {
   rows.push(['', '', '', ''])
   rows.push([
     'TOTAL',
-    formatCurrency(totalRevenue),
-    formatCurrency(totalExpenses),
-    formatCurrency(totalRevenue - totalExpenses)
+    formatCurrencyForCSV(totalRevenue),
+    formatCurrencyForCSV(totalExpenses),
+    formatCurrencyForCSV(totalRevenue - totalExpenses)
   ])
 
   const csv = generateCSV(headers, rows)
