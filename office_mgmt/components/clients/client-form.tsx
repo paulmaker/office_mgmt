@@ -65,14 +65,30 @@ export function ClientForm({ client, onSuccess, onCancel }: ClientFormProps) {
     setError(null)
 
     try {
+      let result
       if (client) {
-        await updateClient(client.id, data)
+        result = await updateClient(client.id, data)
       } else {
-        await createClient(data)
+        result = await createClient(data)
+      }
+      
+      if (result && 'success' in result && !result.success) {
+        setError(result.error ?? 'An error occurred')
+        return
       }
       onSuccess?.()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      // In production, Next.js may sanitize error messages, so we need to extract the message carefully
+      let errorMessage = 'An error occurred'
+      if (err instanceof Error) {
+        errorMessage = err.message
+      } else if (typeof err === 'object' && err !== null && 'message' in err) {
+        errorMessage = String(err.message)
+      } else if (typeof err === 'string') {
+        errorMessage = err
+      }
+      setError(errorMessage)
+      console.error('Client form error:', err)
     } finally {
       setIsSubmitting(false)
     }

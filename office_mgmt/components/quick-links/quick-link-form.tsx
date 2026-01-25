@@ -51,12 +51,13 @@ export function QuickLinkForm({ quickLink, onSuccess, onCancel }: QuickLinkFormP
   const onSubmit = async (data: QuickLinkFormData) => {
     setIsSubmitting(true)
     setError(null)
-
     try {
-      if (quickLink) {
-        await updateQuickLink(quickLink.id, data)
-      } else {
-        await createQuickLink(data)
+      const result = quickLink
+        ? await updateQuickLink(quickLink.id, data)
+        : await createQuickLink(data)
+      if (result && 'success' in result && !result.success) {
+        setError(result.error ?? 'An error occurred')
+        return
       }
       onSuccess?.()
     } catch (err) {

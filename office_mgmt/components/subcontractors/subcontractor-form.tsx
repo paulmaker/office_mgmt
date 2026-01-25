@@ -58,12 +58,13 @@ export function SubcontractorForm({ subcontractor, onSuccess, onCancel }: Subcon
   const onSubmit = async (data: SubcontractorFormData) => {
     setIsSubmitting(true)
     setError(null)
-
     try {
-      if (subcontractor) {
-        await updateSubcontractor(subcontractor.id, data)
-      } else {
-        await createSubcontractor(data)
+      const result = subcontractor
+        ? await updateSubcontractor(subcontractor.id, data)
+        : await createSubcontractor(data)
+      if (result && 'success' in result && !result.success) {
+        setError(result.error ?? 'An error occurred')
+        return
       }
       onSuccess?.()
     } catch (err) {

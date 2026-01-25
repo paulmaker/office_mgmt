@@ -117,69 +117,37 @@ export async function createJob(data: {
   status?: JobStatus
   notes?: string
 }) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
-  }
+  try {
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'Unauthorized' }
 
-  const userId = session.user.id as string
+    const userId = session.user.id as string
+    const canCreate = await hasPermission(userId, 'jobs', 'create')
+    if (!canCreate) return { success: false, error: 'You do not have permission to create jobs' }
 
-  // Check permission
-  const canCreate = await hasPermission(userId, 'jobs', 'create')
-  if (!canCreate) {
-    throw new Error('You do not have permission to create jobs')
-  }
+    const userEntity = await getUserEntity(userId)
+    if (!userEntity) return { success: false, error: 'User entity not found' }
 
-  // Get user's entity
-  const userEntity = await getUserEntity(userId)
-  if (!userEntity) {
-    throw new Error('User entity not found')
-  }
+    const client = await prisma.client.findUnique({ where: { id: data.clientId } })
+    if (!client) return { success: false, error: 'Client not found' }
+    if (client.entityId !== userEntity.entityId) return { success: false, error: 'Client does not belong to your entity' }
 
-  // Verify client belongs to user's entity
-  const client = await prisma.client.findUnique({
-    where: { id: data.clientId },
-  })
-
-  if (!client) {
-    throw new Error('Client not found')
-  }
-
-  if (client.entityId !== userEntity.entityId) {
-    throw new Error('Client does not belong to your entity')
-  }
-
-  // Verify employees belong to user's entity
-  if (data.employeeIds.length > 0) {
-    const employees = await prisma.employee.findMany({
-      where: {
-        id: { in: data.employeeIds },
-        entityId: userEntity.entityId,
-      },
-    })
-
-    if (employees.length !== data.employeeIds.length) {
-      throw new Error('One or more employees not found or do not belong to your entity')
+    if (data.employeeIds.length > 0) {
+      const employees = await prisma.employee.findMany({
+        where: { id: { in: data.employeeIds }, entityId: userEntity.entityId },
+      })
+      if (employees.length !== data.employeeIds.length)
+        return { success: false, error: 'One or more employees not found or do not belong to your entity' }
     }
-  }
 
-  // Calculate total from line items
-  const total = data.lineItems.reduce((sum, item) => sum + item.amount, 0)
+    const total = data.lineItems.reduce((sum, item) => sum + item.amount, 0)
 
-  // Check if job number already exists in entity
-  const existingJob = await prisma.job.findFirst({
-    where: {
-      entityId: userEntity.entityId,
-      jobNumber: data.jobNumber,
-    },
-  })
+    const existingJob = await prisma.job.findFirst({
+      where: { entityId: userEntity.entityId, jobNumber: data.jobNumber },
+    })
+    if (existingJob) return { success: false, error: 'A job with this job number already exists' }
 
-  if (existingJob) {
-    throw new Error('A job with this job number already exists')
-  }
-
-  // Create job with employees and line items
-  const job = await prisma.job.create({
+    const job = await prisma.job.create({
     data: {
       entityId: userEntity.entityId,
       jobNumber: data.jobNumber,
@@ -214,7 +182,10 @@ export async function createJob(data: {
   })
 
   revalidatePath('/jobs')
-  return job
+  return { success: true, data: job }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'An unexpected error occurred' }
+  }
 }
 
 /**
@@ -233,80 +204,46 @@ export async function updateJob(
     notes?: string
   }
 ) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
-  }
+  try {
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'Unauthorized' }
 
-  const userId = session.user.id as string
+    const userId = session.user.id as string
+    const canUpdate = await hasPermission(userId, 'jobs', 'update')
+    if (!canUpdate) return { success: false, error: 'You do not have permission to update jobs' }
 
-  // Check permission
-  const canUpdate = await hasPermission(userId, 'jobs', 'update')
-  if (!canUpdate) {
-    throw new Error('You do not have permission to update jobs')
-  }
-
-  // Get the existing job
-  const existingJob = await prisma.job.findUnique({
-    where: { id },
-    include: {
-      employees: true,
-      lineItems: true,
-    },
-  })
-
-  if (!existingJob) {
-    throw new Error('Job not found')
-  }
-
-  // Verify user can access this job's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingJob.entityId)) {
-    throw new Error('You do not have permission to update this job')
-  }
-
-  // Verify client if being changed
-  if (data.clientId) {
-    const client = await prisma.client.findUnique({
-      where: { id: data.clientId },
+    const existingJob = await prisma.job.findUnique({
+      where: { id },
+      include: { employees: true, lineItems: true },
     })
+    if (!existingJob) return { success: false, error: 'Job not found' }
 
-    if (!client || client.entityId !== existingJob.entityId) {
-      throw new Error('Client not found or does not belong to your entity')
+    const entityIds = await getAccessibleEntityIds(userId)
+    if (!entityIds.includes(existingJob.entityId))
+      return { success: false, error: 'You do not have permission to update this job' }
+
+    if (data.clientId) {
+      const client = await prisma.client.findUnique({ where: { id: data.clientId } })
+      if (!client || client.entityId !== existingJob.entityId)
+        return { success: false, error: 'Client not found or does not belong to your entity' }
     }
-  }
 
-  // Verify employees if being changed
-  if (data.employeeIds) {
-    const employees = await prisma.employee.findMany({
-      where: {
-        id: { in: data.employeeIds },
-        entityId: existingJob.entityId,
-      },
-    })
-
-    if (employees.length !== data.employeeIds.length) {
-      throw new Error('One or more employees not found or do not belong to your entity')
+    if (data.employeeIds) {
+      const employees = await prisma.employee.findMany({
+        where: { id: { in: data.employeeIds }, entityId: existingJob.entityId },
+      })
+      if (employees.length !== data.employeeIds.length)
+        return { success: false, error: 'One or more employees not found or do not belong to your entity' }
     }
-  }
 
-  // Check job number uniqueness if being changed
-  if (data.jobNumber && data.jobNumber !== existingJob.jobNumber) {
-    const duplicate = await prisma.job.findFirst({
-      where: {
-        entityId: existingJob.entityId,
-        jobNumber: data.jobNumber,
-        id: { not: id },
-      },
-    })
-
-    if (duplicate) {
-      throw new Error('A job with this job number already exists')
+    if (data.jobNumber && data.jobNumber !== existingJob.jobNumber) {
+      const duplicate = await prisma.job.findFirst({
+        where: { entityId: existingJob.entityId, jobNumber: data.jobNumber, id: { not: id } },
+      })
+      if (duplicate) return { success: false, error: 'A job with this job number already exists' }
     }
-  }
 
-  // Calculate total from line items if provided
-  let total = existingJob.price
+    let total = existingJob.price
   if (data.lineItems) {
     total = data.lineItems.reduce((sum, item) => sum + item.amount, 0)
   }
@@ -356,7 +293,10 @@ export async function updateJob(
 
   revalidatePath('/jobs')
   revalidatePath(`/jobs/${id}`)
-  return job
+  return { success: true, data: job }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'An unexpected error occurred' }
+  }
 }
 
 /**

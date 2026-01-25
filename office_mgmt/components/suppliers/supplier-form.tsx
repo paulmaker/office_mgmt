@@ -56,12 +56,13 @@ export function SupplierForm({ supplier, onSuccess, onCancel }: SupplierFormProp
   const onSubmit = async (data: SupplierFormData) => {
     setIsSubmitting(true)
     setError(null)
-
     try {
-      if (supplier) {
-        await updateSupplier(supplier.id, data)
-      } else {
-        await createSupplier(data)
+      const result = supplier
+        ? await updateSupplier(supplier.id, data)
+        : await createSupplier(data)
+      if (result && 'success' in result && !result.success) {
+        setError(result.error ?? 'An error occurred')
+        return
       }
       onSuccess?.()
     } catch (err) {

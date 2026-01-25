@@ -158,3 +158,15 @@ export function generateReferenceCode(name: string, companyName?: string | null)
   
   return 'CL' // Ultimate fallback
 }
+
+/** Result type for server actions – avoids production error sanitization */
+export type ServerActionResult<T> =
+  | { success: true; data: T }
+  | { success: false; error: string }
+
+/** Type guard for server action result */
+export function isServerActionError<T>(
+  r: ServerActionResult<T>
+): r is { success: false; error: string } {
+  return r && typeof r === 'object' && 'success' in r && r.success === false
+}

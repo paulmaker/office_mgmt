@@ -36,40 +36,37 @@ export async function getQuickLinks() {
 }
 
 export async function createQuickLink(data: QuickLinkFormData) {
-  const entityId = await getEntityId()
-  const validated = quickLinkSchema.parse(data)
-
-  const quickLink = await prisma.quickLink.create({
-    data: {
-      ...validated,
-      entityId,
-    },
-  })
-
-  revalidatePath('/quick-links')
-  return quickLink
+  try {
+    const entityId = await getEntityId()
+    const validated = quickLinkSchema.parse(data)
+    const quickLink = await prisma.quickLink.create({
+      data: { ...validated, entityId },
+    })
+    revalidatePath('/quick-links')
+    return { success: true, data: quickLink }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'An unexpected error occurred'
+    return { success: false, error: msg }
+  }
 }
 
 export async function updateQuickLink(id: string, data: QuickLinkFormData) {
-  const entityId = await getEntityId()
-  const validated = quickLinkSchema.parse(data)
-
-  // Verify ownership
-  const existing = await prisma.quickLink.findUnique({
-    where: { id },
-  })
-
-  if (!existing || existing.entityId !== entityId) {
-    throw new Error("Quick link not found or unauthorized")
+  try {
+    const entityId = await getEntityId()
+    const validated = quickLinkSchema.parse(data)
+    const existing = await prisma.quickLink.findUnique({ where: { id } })
+    if (!existing || existing.entityId !== entityId)
+      return { success: false, error: 'Quick link not found or unauthorized' }
+    const quickLink = await prisma.quickLink.update({
+      where: { id },
+      data: validated,
+    })
+    revalidatePath('/quick-links')
+    return { success: true, data: quickLink }
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'An unexpected error occurred'
+    return { success: false, error: msg }
   }
-
-  const quickLink = await prisma.quickLink.update({
-    where: { id },
-    data: validated,
-  })
-
-  revalidatePath('/quick-links')
-  return quickLink
 }
 
 export async function deleteQuickLink(id: string) {

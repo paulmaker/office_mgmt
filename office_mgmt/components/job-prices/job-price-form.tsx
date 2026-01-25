@@ -70,15 +70,13 @@ export function JobPriceForm({ jobPrice, onSuccess, onCancel }: JobPriceFormProp
     setError(null)
 
     try {
-      const jobPriceData = {
-        ...data,
-        price: Number(data.price),
-      }
-
-      if (jobPrice) {
-        await updateJobPrice(jobPrice.id, jobPriceData)
-      } else {
-        await createJobPrice(jobPriceData)
+      const jobPriceData = { ...data, price: Number(data.price) }
+      const result = jobPrice
+        ? await updateJobPrice(jobPrice.id, jobPriceData)
+        : await createJobPrice(jobPriceData)
+      if (result && 'success' in result && !result.success) {
+        setError(result.error ?? 'An error occurred')
+        return
       }
       onSuccess?.()
     } catch (err) {

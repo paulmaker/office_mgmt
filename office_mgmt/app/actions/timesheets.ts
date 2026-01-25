@@ -110,90 +110,32 @@ export async function createTimesheet(data: {
   submittedVia?: string
   notes?: string
 }) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
-  }
-
-  const userId = session.user.id as string
-
-  // Check permission
-  const canCreate = await hasPermission(userId, 'timesheets', 'create')
-  if (!canCreate) {
-    throw new Error('You do not have permission to create timesheets')
-  }
-
-  // Get user's entity
-  const userEntity = await getUserEntity(userId)
-  if (!userEntity) {
-    throw new Error('User entity not found')
-  }
-
-  // Verify subcontractor belongs to user's entity
-  const subcontractor = await prisma.subcontractor.findUnique({
-    where: { id: data.subcontractorId },
-  })
-
-  if (!subcontractor) {
-    throw new Error('Subcontractor not found')
-  }
-
-  if (subcontractor.entityId !== userEntity.entityId) {
-    throw new Error('Subcontractor does not belong to your entity')
-  }
-
-  // Calculate amounts
-  const regularAmount = data.hoursWorked * data.rate
-  const additionalHours = data.additionalHours || 0
-  const additionalHoursRate = data.additionalHoursRate || 0
-  const additionalAmount = additionalHours * additionalHoursRate
-  const grossAmount = regularAmount + additionalAmount
-  const cisDeduction = calculateCISDeduction(grossAmount, subcontractor.cisStatus)
-  const expenses = data.expenses || 0
-  const netAmount = grossAmount - cisDeduction + expenses
-
-  // Create timesheet
-  // Note: additionalHours and additionalHoursRate may not exist in database if migration not applied
   try {
-    const timesheet = await prisma.timesheet.create({
-      data: {
-        entityId: userEntity.entityId,
-        subcontractorId: data.subcontractorId,
-        periodStart: data.periodStart,
-        periodEnd: data.periodEnd,
-        hoursWorked: data.hoursWorked,
-        rate: data.rate,
-        additionalHours,
-        additionalHoursRate,
-        grossAmount,
-        cisDeduction,
-        expenses,
-        netAmount,
-        receiptsReceived: data.receiptsReceived || false,
-        submittedDate: data.submittedDate,
-        submittedVia: data.submittedVia || 'MANUAL',
-        status: 'SUBMITTED',
-        notes: data.notes,
-      },
-      include: {
-        subcontractor: true,
-      },
-    })
-    revalidatePath('/timesheets')
-    return timesheet
-  } catch (error: any) {
-    // If the error is about missing columns (migration not applied), try without additional hours fields
-    const errorMessage = error?.message || ''
-    const errorCode = error?.code || ''
-    
-    if (
-      errorMessage.includes('additionalHours') || 
-      errorMessage.includes('column') && errorMessage.includes('does not exist') ||
-      errorCode === 'P2001' || 
-      errorCode === 'P2010' ||
-      errorCode === '42703' // PostgreSQL error code for undefined column
-    ) {
-      // Fallback: create without additional hours fields (for databases without migration)
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'Unauthorized' }
+
+    const userId = session.user.id as string
+    const canCreate = await hasPermission(userId, 'timesheets', 'create')
+    if (!canCreate) return { success: false, error: 'You do not have permission to create timesheets' }
+
+    const userEntity = await getUserEntity(userId)
+    if (!userEntity) return { success: false, error: 'User entity not found' }
+
+    const subcontractor = await prisma.subcontractor.findUnique({ where: { id: data.subcontractorId } })
+    if (!subcontractor) return { success: false, error: 'Subcontractor not found' }
+    if (subcontractor.entityId !== userEntity.entityId)
+      return { success: false, error: 'Subcontractor does not belong to your entity' }
+
+    const regularAmount = data.hoursWorked * data.rate
+    const additionalHours = data.additionalHours || 0
+    const additionalHoursRate = data.additionalHoursRate || 0
+    const additionalAmount = additionalHours * additionalHoursRate
+    const grossAmount = regularAmount + additionalAmount
+    const cisDeduction = calculateCISDeduction(grossAmount, subcontractor.cisStatus)
+    const expenses = data.expenses || 0
+    const netAmount = grossAmount - cisDeduction + expenses
+
+    try {
       const timesheet = await prisma.timesheet.create({
         data: {
           entityId: userEntity.entityId,
@@ -202,6 +144,8 @@ export async function createTimesheet(data: {
           periodEnd: data.periodEnd,
           hoursWorked: data.hoursWorked,
           rate: data.rate,
+          additionalHours,
+          additionalHoursRate,
           grossAmount,
           cisDeduction,
           expenses,
@@ -211,15 +155,48 @@ export async function createTimesheet(data: {
           submittedVia: data.submittedVia || 'MANUAL',
           status: 'SUBMITTED',
           notes: data.notes,
-        } as any, // Type assertion needed if fields don't exist in schema
-        include: {
-          subcontractor: true,
         },
+        include: { subcontractor: true },
       })
       revalidatePath('/timesheets')
-      return timesheet
+      return { success: true, data: timesheet }
+    } catch (error: any) {
+      const errorMessage = error?.message || ''
+      const errorCode = error?.code || ''
+      if (
+        errorMessage.includes('additionalHours') ||
+        (errorMessage.includes('column') && errorMessage.includes('does not exist')) ||
+        errorCode === 'P2001' ||
+        errorCode === 'P2010' ||
+        errorCode === '42703'
+      ) {
+        const timesheet = await prisma.timesheet.create({
+          data: {
+            entityId: userEntity.entityId,
+            subcontractorId: data.subcontractorId,
+            periodStart: data.periodStart,
+            periodEnd: data.periodEnd,
+            hoursWorked: data.hoursWorked,
+            rate: data.rate,
+            grossAmount,
+            cisDeduction,
+            expenses,
+            netAmount,
+            receiptsReceived: data.receiptsReceived || false,
+            submittedDate: data.submittedDate,
+            submittedVia: data.submittedVia || 'MANUAL',
+            status: 'SUBMITTED',
+            notes: data.notes,
+          } as any,
+          include: { subcontractor: true },
+        })
+        revalidatePath('/timesheets')
+        return { success: true, data: timesheet }
+      }
+      return { success: false, error: error instanceof Error ? error.message : 'An unexpected error occurred' }
     }
-    throw error
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'An unexpected error occurred' }
   }
 }
 
@@ -244,49 +221,29 @@ export async function updateTimesheet(
     notes?: string
   }
 ) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
-  }
+  try {
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'Unauthorized' }
 
-  const userId = session.user.id as string
+    const userId = session.user.id as string
+    const canUpdate = await hasPermission(userId, 'timesheets', 'update')
+    if (!canUpdate) return { success: false, error: 'You do not have permission to update timesheets' }
 
-  // Check permission
-  const canUpdate = await hasPermission(userId, 'timesheets', 'update')
-  if (!canUpdate) {
-    throw new Error('You do not have permission to update timesheets')
-  }
+    const existingTimesheet = await prisma.timesheet.findUnique({
+      where: { id },
+      include: { subcontractor: true },
+    })
+    if (!existingTimesheet) return { success: false, error: 'Timesheet not found' }
 
-  // Get the existing timesheet
-  const existingTimesheet = await prisma.timesheet.findUnique({
-    where: { id },
-    include: {
-      subcontractor: true,
-    },
-  })
+    const entityIds = await getAccessibleEntityIds(userId)
+    if (!entityIds.includes(existingTimesheet.entityId))
+      return { success: false, error: 'You do not have permission to update this timesheet' }
 
-  if (!existingTimesheet) {
-    throw new Error('Timesheet not found')
-  }
+    const subcontractorId = data.subcontractorId || existingTimesheet.subcontractorId
+    const subcontractor = await prisma.subcontractor.findUnique({ where: { id: subcontractorId } })
+    if (!subcontractor) return { success: false, error: 'Subcontractor not found' }
 
-  // Verify user can access this timesheet's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingTimesheet.entityId)) {
-    throw new Error('You do not have permission to update this timesheet')
-  }
-
-  // Get subcontractor (use existing or new)
-  const subcontractorId = data.subcontractorId || existingTimesheet.subcontractorId
-  const subcontractor = await prisma.subcontractor.findUnique({
-    where: { id: subcontractorId },
-  })
-
-  if (!subcontractor) {
-    throw new Error('Subcontractor not found')
-  }
-
-  // Calculate amounts
-  const hoursWorked = data.hoursWorked ?? existingTimesheet.hoursWorked
+    const hoursWorked = data.hoursWorked ?? existingTimesheet.hoursWorked
   const rate = data.rate ?? existingTimesheet.rate
   const additionalHours = data.additionalHours ?? (existingTimesheet as any).additionalHours ?? 0
   const additionalHoursRate = data.additionalHoursRate ?? (existingTimesheet as any).additionalHoursRate ?? 0
@@ -325,7 +282,10 @@ export async function updateTimesheet(
 
   revalidatePath('/timesheets')
   revalidatePath(`/timesheets/${id}`)
-  return timesheet
+  return { success: true, data: timesheet }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'An unexpected error occurred' }
+  }
 }
 
 /**

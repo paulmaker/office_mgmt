@@ -65,12 +65,21 @@ export function ReconcileDialog({ open, onOpenChange, transaction, onSuccess }: 
     setIsSubmitting(true)
 
     try {
-      await reconcileTransaction(transaction.id, {
+      const result = await reconcileTransaction(transaction.id, {
         invoiceId: selectedInvoiceId || null,
         linkedTimesheetId: selectedTimesheetId || null,
         documentUrl: documentUrl || null,
         notes: notes || undefined,
       })
+
+      if (result && 'success' in result && !result.success) {
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: result.error ?? 'Failed to reconcile transaction',
+        })
+        return
+      }
 
       toast({
         variant: 'success',

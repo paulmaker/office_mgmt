@@ -94,43 +94,37 @@ export async function createSupplier(data: {
   paymentTerms?: number
   notes?: string
 }) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
+  try {
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'Unauthorized' }
+
+    const userId = session.user.id as string
+    const canCreate = await hasPermission(userId, 'suppliers', 'create')
+    if (!canCreate) return { success: false, error: 'You do not have permission to create suppliers' }
+
+    const userEntity = await getUserEntity(userId)
+    if (!userEntity) return { success: false, error: 'User entity not found' }
+
+    const supplier = await prisma.supplier.create({
+      data: {
+        entityId: userEntity.entityId,
+        name: data.name,
+        companyName: data.companyName,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        vatNumber: data.vatNumber,
+        vatRegistered: data.vatRegistered ?? false,
+        paymentTerms: data.paymentTerms ?? 30,
+        notes: data.notes,
+      },
+    })
+
+    revalidatePath('/suppliers')
+    return { success: true, data: supplier }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'An unexpected error occurred' }
   }
-
-  const userId = session.user.id as string
-
-  // Check permission
-  const canCreate = await hasPermission(userId, 'suppliers', 'create')
-  if (!canCreate) {
-    throw new Error('You do not have permission to create suppliers')
-  }
-
-  // Get user's entity
-  const userEntity = await getUserEntity(userId)
-  if (!userEntity) {
-    throw new Error('User entity not found')
-  }
-
-  // Create supplier scoped to user's entity
-  const supplier = await prisma.supplier.create({
-    data: {
-      entityId: userEntity.entityId,
-      name: data.name,
-      companyName: data.companyName,
-      email: data.email,
-      phone: data.phone,
-      address: data.address,
-      vatNumber: data.vatNumber,
-      vatRegistered: data.vatRegistered ?? false,
-      paymentTerms: data.paymentTerms ?? 30,
-      notes: data.notes,
-    },
-  })
-
-  revalidatePath('/suppliers')
-  return supplier
 }
 
 /**
@@ -150,53 +144,42 @@ export async function updateSupplier(
     notes?: string
   }
 ) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
+  try {
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'Unauthorized' }
+
+    const userId = session.user.id as string
+    const canUpdate = await hasPermission(userId, 'suppliers', 'update')
+    if (!canUpdate) return { success: false, error: 'You do not have permission to update suppliers' }
+
+    const existingSupplier = await prisma.supplier.findUnique({ where: { id } })
+    if (!existingSupplier) return { success: false, error: 'Supplier not found' }
+
+    const entityIds = await getAccessibleEntityIds(userId)
+    if (!entityIds.includes(existingSupplier.entityId))
+      return { success: false, error: 'You do not have permission to update this supplier' }
+
+    const supplier = await prisma.supplier.update({
+      where: { id },
+      data: {
+        name: data.name,
+        companyName: data.companyName,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        vatNumber: data.vatNumber,
+        vatRegistered: data.vatRegistered,
+        paymentTerms: data.paymentTerms,
+        notes: data.notes,
+      },
+    })
+
+    revalidatePath('/suppliers')
+    revalidatePath(`/suppliers/${id}`)
+    return { success: true, data: supplier }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'An unexpected error occurred' }
   }
-
-  const userId = session.user.id as string
-
-  // Check permission
-  const canUpdate = await hasPermission(userId, 'suppliers', 'update')
-  if (!canUpdate) {
-    throw new Error('You do not have permission to update suppliers')
-  }
-
-  // Get the existing supplier
-  const existingSupplier = await prisma.supplier.findUnique({
-    where: { id },
-  })
-
-  if (!existingSupplier) {
-    throw new Error('Supplier not found')
-  }
-
-  // Verify user can access this supplier's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingSupplier.entityId)) {
-    throw new Error('You do not have permission to update this supplier')
-  }
-
-  // Update supplier
-  const supplier = await prisma.supplier.update({
-    where: { id },
-    data: {
-      name: data.name,
-      companyName: data.companyName,
-      email: data.email,
-      phone: data.phone,
-      address: data.address,
-      vatNumber: data.vatNumber,
-      vatRegistered: data.vatRegistered,
-      paymentTerms: data.paymentTerms,
-      notes: data.notes,
-    },
-  })
-
-  revalidatePath('/suppliers')
-  revalidatePath(`/suppliers/${id}`)
-  return supplier
 }
 
 /**

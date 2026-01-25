@@ -109,10 +109,12 @@ export function TimesheetForm({ timesheet, onSuccess, onCancel }: TimesheetFormP
         additionalHoursRate: Number(data.additionalHoursRate) || 0,
       }
 
-      if (timesheet) {
-        await updateTimesheet(timesheet.id, timesheetData)
-      } else {
-        await createTimesheet(timesheetData)
+      const result = timesheet
+        ? await updateTimesheet(timesheet.id, timesheetData)
+        : await createTimesheet(timesheetData)
+      if (result && 'success' in result && !result.success) {
+        setError(result.error ?? 'An error occurred')
+        return
       }
       onSuccess?.()
     } catch (err) {

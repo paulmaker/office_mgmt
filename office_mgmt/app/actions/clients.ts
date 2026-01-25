@@ -104,24 +104,25 @@ export async function createClient(data: {
   ratesConfig?: any
   notes?: string
 }) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
-  }
+  try {
+    const session = await auth()
+    if (!session?.user) {
+      return { success: false, error: 'Unauthorized' }
+    }
 
-  const userId = session.user.id as string
+    const userId = session.user.id as string
 
-  // Check permission
-  const canCreate = await hasPermission(userId, 'clients', 'create')
-  if (!canCreate) {
-    throw new Error('You do not have permission to create clients')
-  }
+    // Check permission
+    const canCreate = await hasPermission(userId, 'clients', 'create')
+    if (!canCreate) {
+      return { success: false, error: 'You do not have permission to create clients' }
+    }
 
-  // Get user's entity
-  const userEntity = await getUserEntity(userId)
-  if (!userEntity) {
-    throw new Error('User entity not found')
-  }
+    // Get user's entity
+    const userEntity = await getUserEntity(userId)
+    if (!userEntity) {
+      return { success: false, error: 'User entity not found' }
+    }
 
   // Auto-generate reference code if not provided, or validate if provided
   let referenceCode = data.referenceCode?.toUpperCase().trim()
@@ -151,14 +152,14 @@ export async function createClient(data: {
       
       // Safety limit
       if (number > 9999) {
-        throw new Error('Unable to generate unique reference code. Please specify one manually.')
+        return { success: false, error: 'Unable to generate unique reference code. Please specify one manually.' }
       }
     }
     referenceCode = finalCode
   } else {
     // Validate format: 2 uppercase letters followed by at least one number
     if (!/^[A-Z]{2}\d+$/.test(referenceCode)) {
-      throw new Error('Reference code must be 2 uppercase letters followed by a number (e.g., CC1, BS12, CC2)')
+      return { success: false, error: 'Reference code must be 2 uppercase letters followed by a number (e.g., CC1, BS12, CC2)' }
     }
     
     // Check if provided reference code is unique
@@ -170,49 +171,47 @@ export async function createClient(data: {
     })
     
     if (existing) {
-      throw new Error('Reference code already exists for another client in this entity')
+      return { success: false, error: 'Reference code already exists for another client in this entity' }
     }
   }
 
-  // Create client scoped to user's entity
-  const client = await prisma.client.create({
-    data: {
-      entityId: userEntity.entityId,
-      name: data.name,
-      companyName: data.companyName,
-      email: data.email,
-      phone: data.phone,
-      address: data.address,
-      billingAddress: data.billingAddress,
-      vatNumber: data.vatNumber,
-      vatRegistered: data.vatRegistered ?? false,
-      cisRegistered: data.cisRegistered ?? false,
-      paymentTerms: data.paymentTerms ?? 30,
-      referenceCode: referenceCode,
-      ratesConfig: data.ratesConfig,
-      notes: data.notes,
-    },
-  })
+    // Create client scoped to user's entity
+    const client = await prisma.client.create({
+      data: {
+        entityId: userEntity.entityId,
+        name: data.name,
+        companyName: data.companyName,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        billingAddress: data.billingAddress,
+        vatNumber: data.vatNumber,
+        vatRegistered: data.vatRegistered ?? false,
+        cisRegistered: data.cisRegistered ?? false,
+        paymentTerms: data.paymentTerms ?? 30,
+        referenceCode: referenceCode,
+        ratesConfig: data.ratesConfig,
+        notes: data.notes,
+      },
+    })
 
-  // Parse reference code and create InvoiceCode record
-  // Note: lastNumber starts at 0, and the invoice generation logic will use the starting number from reference code
-  const refCode = referenceCode.toUpperCase()
-  const match = refCode.match(/^([A-Z]{2})(\d*)$/)
-  if (match) {
-    const prefix = match[1]
-    
+    // Create InvoiceCode record with full reference code as prefix
     await prisma.invoiceCode.create({
       data: {
         entityId: userEntity.entityId,
         clientId: client.id,
-        prefix: prefix,
-        lastNumber: 0, // Will be set correctly on first invoice generation
+        prefix: referenceCode, // Use full reference code (e.g., CC1, BS12)
+        lastNumber: 0,
       },
     })
-  }
 
-  revalidatePath('/clients')
-  return client
+    revalidatePath('/clients')
+    return { success: true, data: client }
+  } catch (error) {
+    // Catch any unexpected errors and return them
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred'
+    return { success: false, error: errorMessage }
+  }
 }
 
 /**
@@ -236,113 +235,119 @@ export async function updateClient(
     notes?: string
   }
 ) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
-  }
-
-  const userId = session.user.id as string
-
-  // Check permission
-  const canUpdate = await hasPermission(userId, 'clients', 'update')
-  if (!canUpdate) {
-    throw new Error('You do not have permission to update clients')
-  }
-
-  // Get the existing client
-  const existingClient = await prisma.client.findUnique({
-    where: { id },
-  })
-
-  if (!existingClient) {
-    throw new Error('Client not found')
-  }
-
-  // Verify user can access this client's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingClient.entityId)) {
-    throw new Error('You do not have permission to update this client')
-  }
-
-  // Validate reference code format and uniqueness if being changed
-  let validatedReferenceCode = existingClient.referenceCode
-  if (data.referenceCode) {
-    validatedReferenceCode = data.referenceCode.toUpperCase().trim()
-    
-    // Validate format: 2 uppercase letters followed by at least one number
-    if (!/^[A-Z]{2}\d+$/.test(validatedReferenceCode)) {
-      throw new Error('Reference code must be 2 uppercase letters followed by a number (e.g., CC1, BS12, CC2)')
+  try {
+    const session = await auth()
+    if (!session?.user) {
+      return { success: false, error: 'Unauthorized' }
     }
-    
-    // Only check uniqueness if it's different from current
-    if (validatedReferenceCode !== existingClient.referenceCode) {
-      const existing = await prisma.client.findFirst({
-        where: {
-          entityId: existingClient.entityId,
-          referenceCode: validatedReferenceCode,
-          id: { not: id },
-        },
-      })
+
+    const userId = session.user.id as string
+
+    // Check permission
+    const canUpdate = await hasPermission(userId, 'clients', 'update')
+    if (!canUpdate) {
+      return { success: false, error: 'You do not have permission to update clients' }
+    }
+
+    // Get the existing client
+    const existingClient = await prisma.client.findUnique({
+      where: { id },
+    })
+
+    if (!existingClient) {
+      return { success: false, error: 'Client not found' }
+    }
+
+    // Verify user can access this client's entity
+    const entityIds = await getAccessibleEntityIds(userId)
+    if (!entityIds.includes(existingClient.entityId)) {
+      return { success: false, error: 'You do not have permission to update this client' }
+    }
+
+    // Validate reference code format and uniqueness if being changed
+    let validatedReferenceCode = existingClient.referenceCode
+    if (data.referenceCode) {
+      validatedReferenceCode = data.referenceCode.toUpperCase().trim()
       
-      if (existing) {
-        throw new Error('Reference code already exists for another client in this entity')
+      // Validate format: 2 uppercase letters followed by at least one number
+      if (!/^[A-Z]{2}\d+$/.test(validatedReferenceCode)) {
+        return { success: false, error: 'Reference code must be 2 uppercase letters followed by a number (e.g., CC1, BS12, CC2)' }
+      }
+      
+      // Only check uniqueness if it's different from current
+      if (validatedReferenceCode !== existingClient.referenceCode) {
+        const existing = await prisma.client.findFirst({
+          where: {
+            entityId: existingClient.entityId,
+            referenceCode: validatedReferenceCode,
+            id: { not: id },
+          },
+        })
+        
+        if (existing) {
+          return { success: false, error: 'Reference code already exists for another client in this entity' }
+        }
       }
     }
-  }
 
-  // Update client
-  const client = await prisma.client.update({
-    where: { id },
-    data: {
-      name: data.name,
-      companyName: data.companyName,
-      email: data.email,
-      phone: data.phone,
-      address: data.address,
-      billingAddress: data.billingAddress,
-      vatNumber: data.vatNumber,
-      vatRegistered: data.vatRegistered,
-      cisRegistered: data.cisRegistered,
-      paymentTerms: data.paymentTerms,
-      referenceCode: validatedReferenceCode,
-      ratesConfig: data.ratesConfig,
-      notes: data.notes,
-    },
-  })
+    // Update client
+    const client = await prisma.client.update({
+      where: { id },
+      data: {
+        name: data.name,
+        companyName: data.companyName,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        billingAddress: data.billingAddress,
+        vatNumber: data.vatNumber,
+        vatRegistered: data.vatRegistered,
+        cisRegistered: data.cisRegistered,
+        paymentTerms: data.paymentTerms,
+        referenceCode: validatedReferenceCode,
+        ratesConfig: data.ratesConfig,
+        notes: data.notes,
+      },
+    })
 
-  // If reference code changed, update the InvoiceCode record prefix
-  // Note: We don't reset lastNumber - invoices already generated should keep their numbers
-  if (validatedReferenceCode && validatedReferenceCode !== existingClient.referenceCode) {
-    const refCode = validatedReferenceCode.toUpperCase()
-    const match = refCode.match(/^([A-Z]{2})\d+$/)
-    if (match) {
-      const prefix = refCode // Use full reference code as prefix
-      
-      // Update or create InvoiceCode record (only update prefix, keep lastNumber)
-      await prisma.invoiceCode.upsert({
-        where: {
-          entityId_clientId: {
+    // If reference code changed, update the InvoiceCode record prefix
+    // Note: We don't reset lastNumber - invoices already generated should keep their numbers
+    if (validatedReferenceCode && validatedReferenceCode !== existingClient.referenceCode) {
+      const refCode = validatedReferenceCode.toUpperCase()
+      const match = refCode.match(/^([A-Z]{2})\d+$/)
+      if (match) {
+        const prefix = refCode // Use full reference code as prefix
+        
+        // Update or create InvoiceCode record (only update prefix, keep lastNumber)
+        await prisma.invoiceCode.upsert({
+          where: {
+            entityId_clientId: {
+              entityId: existingClient.entityId,
+              clientId: id,
+            },
+          },
+          update: {
+            prefix: prefix,
+            // Don't reset lastNumber - keep existing invoice numbering
+          },
+          create: {
             entityId: existingClient.entityId,
             clientId: id,
+            prefix: prefix,
+            lastNumber: 0,
           },
-        },
-        update: {
-          prefix: prefix,
-          // Don't reset lastNumber - keep existing invoice numbering
-        },
-        create: {
-          entityId: existingClient.entityId,
-          clientId: id,
-          prefix: prefix,
-          lastNumber: 0,
-        },
-      })
+        })
+      }
     }
-  }
 
-  revalidatePath('/clients')
-  revalidatePath(`/clients/${id}`)
-  return client
+    revalidatePath('/clients')
+    revalidatePath(`/clients/${id}`)
+    return { success: true, data: client }
+  } catch (error) {
+    // Catch any unexpected errors and return them
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred'
+    return { success: false, error: errorMessage }
+  }
 }
 
 /**

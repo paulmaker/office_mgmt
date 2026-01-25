@@ -77,10 +77,12 @@ export function AssetForm({ asset, onSuccess, onCancel }: AssetFormProps) {
         notes: data.notes || undefined,
       }
 
-      if (asset) {
-        await updateAsset(asset.id, assetData)
-      } else {
-        await createAsset(assetData)
+      const result = asset
+        ? await updateAsset(asset.id, assetData)
+        : await createAsset(assetData)
+      if (result && 'success' in result && !result.success) {
+        setError(result.error ?? 'An error occurred')
+        return
       }
       onSuccess?.()
     } catch (err) {

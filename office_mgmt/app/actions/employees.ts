@@ -91,68 +91,48 @@ export async function createEmployee(data: {
   car?: string
   notes?: string
 }) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
-  }
+  try {
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'Unauthorized' }
 
-  const userId = session.user.id as string
+    const userId = session.user.id as string
+    const canCreate = await hasPermission(userId, 'employees', 'create')
+    if (!canCreate) return { success: false, error: 'You do not have permission to create employees' }
 
-  // Check permission
-  const canCreate = await hasPermission(userId, 'employees', 'create')
-  if (!canCreate) {
-    throw new Error('You do not have permission to create employees')
-  }
+    const userEntity = await getUserEntity(userId)
+    if (!userEntity) return { success: false, error: 'User entity not found' }
 
-  // Get user's entity
-  const userEntity = await getUserEntity(userId)
-  if (!userEntity) {
-    throw new Error('User entity not found')
-  }
+    if (data.email) {
+      const existing = await prisma.employee.findFirst({
+        where: { entityId: userEntity.entityId, email: data.email },
+      })
+      if (existing) return { success: false, error: 'An employee with this email already exists' }
+    }
 
-  // Check if email already exists in this entity (if provided)
-  if (data.email) {
-    const existing = await prisma.employee.findFirst({
-      where: {
+    if (data.employeeId) {
+      const existing = await prisma.employee.findFirst({
+        where: { entityId: userEntity.entityId, employeeId: data.employeeId },
+      })
+      if (existing) return { success: false, error: 'An employee with this employee ID already exists' }
+    }
+
+    const employee = await prisma.employee.create({
+      data: {
         entityId: userEntity.entityId,
+        name: data.name,
         email: data.email,
-      },
-    })
-
-    if (existing) {
-      throw new Error('An employee with this email already exists')
-    }
-  }
-
-  // Check if employeeId already exists in this entity (if provided)
-  if (data.employeeId) {
-    const existing = await prisma.employee.findFirst({
-      where: {
-        entityId: userEntity.entityId,
+        phone: data.phone,
         employeeId: data.employeeId,
+        car: data.car,
+        notes: data.notes,
       },
     })
 
-    if (existing) {
-      throw new Error('An employee with this employee ID already exists')
-    }
+    revalidatePath('/employees')
+    return { success: true, data: employee }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'An unexpected error occurred' }
   }
-
-  // Create employee scoped to user's entity
-  const employee = await prisma.employee.create({
-    data: {
-      entityId: userEntity.entityId,
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      employeeId: data.employeeId,
-      car: data.car,
-      notes: data.notes,
-    },
-  })
-
-  revalidatePath('/employees')
-  return employee
 }
 
 /**
@@ -169,80 +149,53 @@ export async function updateEmployee(
     notes?: string
   }
 ) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
-  }
+  try {
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'Unauthorized' }
 
-  const userId = session.user.id as string
+    const userId = session.user.id as string
+    const canUpdate = await hasPermission(userId, 'employees', 'update')
+    if (!canUpdate) return { success: false, error: 'You do not have permission to update employees' }
 
-  // Check permission
-  const canUpdate = await hasPermission(userId, 'employees', 'update')
-  if (!canUpdate) {
-    throw new Error('You do not have permission to update employees')
-  }
+    const existingEmployee = await prisma.employee.findUnique({ where: { id } })
+    if (!existingEmployee) return { success: false, error: 'Employee not found' }
 
-  // Get the existing employee
-  const existingEmployee = await prisma.employee.findUnique({
-    where: { id },
-  })
+    const entityIds = await getAccessibleEntityIds(userId)
+    if (!entityIds.includes(existingEmployee.entityId))
+      return { success: false, error: 'You do not have permission to update this employee' }
 
-  if (!existingEmployee) {
-    throw new Error('Employee not found')
-  }
+    if (data.email && data.email !== existingEmployee.email) {
+      const duplicate = await prisma.employee.findFirst({
+        where: { entityId: existingEmployee.entityId, email: data.email, id: { not: id } },
+      })
+      if (duplicate) return { success: false, error: 'An employee with this email already exists' }
+    }
 
-  // Verify user can access this employee's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingEmployee.entityId)) {
-    throw new Error('You do not have permission to update this employee')
-  }
+    if (data.employeeId && data.employeeId !== existingEmployee.employeeId) {
+      const duplicate = await prisma.employee.findFirst({
+        where: { entityId: existingEmployee.entityId, employeeId: data.employeeId, id: { not: id } },
+      })
+      if (duplicate) return { success: false, error: 'An employee with this employee ID already exists' }
+    }
 
-  // If email is being changed, check for duplicates
-  if (data.email && data.email !== existingEmployee.email) {
-    const duplicate = await prisma.employee.findFirst({
-      where: {
-        entityId: existingEmployee.entityId,
+    const employee = await prisma.employee.update({
+      where: { id },
+      data: {
+        name: data.name,
         email: data.email,
-        id: { not: id },
-      },
-    })
-
-    if (duplicate) {
-      throw new Error('An employee with this email already exists')
-    }
-  }
-
-  // If employeeId is being changed, check for duplicates
-  if (data.employeeId && data.employeeId !== existingEmployee.employeeId) {
-    const duplicate = await prisma.employee.findFirst({
-      where: {
-        entityId: existingEmployee.entityId,
+        phone: data.phone,
         employeeId: data.employeeId,
-        id: { not: id },
+        car: data.car,
+        notes: data.notes,
       },
     })
 
-    if (duplicate) {
-      throw new Error('An employee with this employee ID already exists')
-    }
+    revalidatePath('/employees')
+    revalidatePath(`/employees/${id}`)
+    return { success: true, data: employee }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'An unexpected error occurred' }
   }
-
-  // Update employee
-  const employee = await prisma.employee.update({
-    where: { id },
-    data: {
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      employeeId: data.employeeId,
-      car: data.car,
-      notes: data.notes,
-    },
-  })
-
-  revalidatePath('/employees')
-  revalidatePath(`/employees/${id}`)
-  return employee
 }
 
 /**

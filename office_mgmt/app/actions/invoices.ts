@@ -142,36 +142,23 @@ export async function createInvoice(data: {
   status?: InvoiceStatus
   notes?: string
 }) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
-  }
+  try {
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'Unauthorized' }
 
-  const userId = session.user.id as string
+    const userId = session.user.id as string
+    const canCreate = await hasPermission(userId, 'invoices', 'create')
+    if (!canCreate) return { success: false, error: 'You do not have permission to create invoices' }
 
-  // Check permission
-  const canCreate = await hasPermission(userId, 'invoices', 'create')
-  if (!canCreate) {
-    throw new Error('You do not have permission to create invoices')
-  }
+    const userEntity = await getUserEntity(userId)
+    if (!userEntity) return { success: false, error: 'User entity not found' }
 
-  // Get user's entity
-  const userEntity = await getUserEntity(userId)
-  if (!userEntity) {
-    throw new Error('User entity not found')
-  }
+    if (!data.clientId && !data.subcontractorId && !data.supplierId)
+      return { success: false, error: 'Invoice must have a client, subcontractor, or supplier' }
 
-  // Validate that we have either client, subcontractor, or supplier
-  if (!data.clientId && !data.subcontractorId && !data.supplierId) {
-    throw new Error('Invoice must have a client, subcontractor, or supplier')
-  }
-
-  // For sales invoices, require client and generate invoice number
   let invoiceNumber = ''
   if (data.type === 'SALES') {
-    if (!data.clientId) {
-      throw new Error('Sales invoices require a client')
-    }
+    if (!data.clientId) return { success: false, error: 'Sales invoices require a client' }
     invoiceNumber = await generateInvoiceNumber(data.clientId)
   } else {
     // For purchase invoices, use a simple format
@@ -215,11 +202,8 @@ export async function createInvoice(data: {
     },
   })
 
-  if (existing) {
-    throw new Error('Invoice number already exists. Please try again.')
-  }
+  if (existing) return { success: false, error: 'Invoice number already exists. Please try again.' }
 
-  // Create invoice
   const invoice = await prisma.invoice.create({
     data: {
       entityId: userEntity.entityId,
@@ -260,7 +244,10 @@ export async function createInvoice(data: {
   })
 
   revalidatePath('/invoices')
-  return invoice
+  return { success: true, data: invoice }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'An unexpected error occurred' }
+  }
 }
 
 /**
@@ -291,36 +278,22 @@ export async function updateInvoice(
     notes?: string
   }
 ) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
-  }
+  try {
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'Unauthorized' }
 
-  const userId = session.user.id as string
+    const userId = session.user.id as string
+    const canUpdate = await hasPermission(userId, 'invoices', 'update')
+    if (!canUpdate) return { success: false, error: 'You do not have permission to update invoices' }
 
-  // Check permission
-  const canUpdate = await hasPermission(userId, 'invoices', 'update')
-  if (!canUpdate) {
-    throw new Error('You do not have permission to update invoices')
-  }
+    const existingInvoice = await prisma.invoice.findUnique({ where: { id } })
+    if (!existingInvoice) return { success: false, error: 'Invoice not found' }
 
-  // Get the existing invoice
-  const existingInvoice = await prisma.invoice.findUnique({
-    where: { id },
-  })
+    const entityIds = await getAccessibleEntityIds(userId)
+    if (!entityIds.includes(existingInvoice.entityId))
+      return { success: false, error: 'You do not have permission to update this invoice' }
 
-  if (!existingInvoice) {
-    throw new Error('Invoice not found')
-  }
-
-  // Verify user can access this invoice's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingInvoice.entityId)) {
-    throw new Error('You do not have permission to update this invoice')
-  }
-
-  // Calculate subtotal from line items if provided
-  let subtotal = existingInvoice.subtotal
+    let subtotal = existingInvoice.subtotal
   if (data.lineItems) {
     subtotal = data.lineItems.reduce((sum, item) => sum + item.amount, 0)
   }
@@ -389,7 +362,10 @@ export async function updateInvoice(
 
   revalidatePath('/invoices')
   revalidatePath(`/invoices/${id}`)
-  return invoice
+  return { success: true, data: invoice }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'An unexpected error occurred' }
+  }
 }
 
 /**

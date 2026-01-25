@@ -249,10 +249,12 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
         })),
       }
 
-      if (invoice) {
-        await updateInvoice(invoice.id, invoiceData)
-      } else {
-        await createInvoice(invoiceData)
+      const result = invoice
+        ? await updateInvoice(invoice.id, invoiceData)
+        : await createInvoice(invoiceData)
+      if (result && 'success' in result && !result.success) {
+        setError(result.error ?? 'An error occurred')
+        return
       }
       onSuccess?.()
     } catch (err) {

@@ -102,57 +102,44 @@ export async function createSubcontractor(data: {
   bankDetails?: any
   notes?: string
 }) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
+  try {
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'Unauthorized' }
+
+    const userId = session.user.id as string
+    const canCreate = await hasPermission(userId, 'subcontractors', 'create')
+    if (!canCreate) return { success: false, error: 'You do not have permission to create subcontractors' }
+
+    const userEntity = await getUserEntity(userId)
+    if (!userEntity) return { success: false, error: 'User entity not found' }
+
+    const existing = await prisma.subcontractor.findFirst({
+      where: { entityId: userEntity.entityId, email: data.email },
+    })
+    if (existing) return { success: false, error: 'A subcontractor with this email already exists' }
+
+    const subcontractor = await prisma.subcontractor.create({
+      data: {
+        entityId: userEntity.entityId,
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        niNumber: data.niNumber,
+        utr: data.utr,
+        cisVerificationNumber: data.cisVerificationNumber,
+        cisStatus: data.cisStatus ?? 'NOT_VERIFIED',
+        paymentType: data.paymentType ?? 'CIS',
+        bankDetails: data.bankDetails,
+        notes: data.notes,
+      },
+    })
+
+    revalidatePath('/payroll')
+    return { success: true, data: subcontractor }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'An unexpected error occurred' }
   }
-
-  const userId = session.user.id as string
-
-  // Check permission
-  const canCreate = await hasPermission(userId, 'subcontractors', 'create')
-  if (!canCreate) {
-    throw new Error('You do not have permission to create subcontractors')
-  }
-
-  // Get user's entity
-  const userEntity = await getUserEntity(userId)
-  if (!userEntity) {
-    throw new Error('User entity not found')
-  }
-
-  // Check if email already exists in this entity
-  const existing = await prisma.subcontractor.findFirst({
-    where: {
-      entityId: userEntity.entityId,
-      email: data.email,
-    },
-  })
-
-  if (existing) {
-    throw new Error('A subcontractor with this email already exists')
-  }
-
-  // Create subcontractor scoped to user's entity
-  const subcontractor = await prisma.subcontractor.create({
-    data: {
-      entityId: userEntity.entityId,
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      address: data.address,
-      niNumber: data.niNumber,
-      utr: data.utr,
-      cisVerificationNumber: data.cisVerificationNumber,
-      cisStatus: data.cisStatus ?? 'NOT_VERIFIED',
-      paymentType: data.paymentType ?? 'CIS',
-      bankDetails: data.bankDetails,
-      notes: data.notes,
-    },
-  })
-
-  revalidatePath('/payroll')
-  return subcontractor
 }
 
 /**
@@ -174,68 +161,50 @@ export async function updateSubcontractor(
     notes?: string
   }
 ) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
-  }
+  try {
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'Unauthorized' }
 
-  const userId = session.user.id as string
+    const userId = session.user.id as string
+    const canUpdate = await hasPermission(userId, 'subcontractors', 'update')
+    if (!canUpdate) return { success: false, error: 'You do not have permission to update subcontractors' }
 
-  // Check permission
-  const canUpdate = await hasPermission(userId, 'subcontractors', 'update')
-  if (!canUpdate) {
-    throw new Error('You do not have permission to update subcontractors')
-  }
+    const existingSubcontractor = await prisma.subcontractor.findUnique({ where: { id } })
+    if (!existingSubcontractor) return { success: false, error: 'Subcontractor not found' }
 
-  // Get the existing subcontractor
-  const existingSubcontractor = await prisma.subcontractor.findUnique({
-    where: { id },
-  })
+    const entityIds = await getAccessibleEntityIds(userId)
+    if (!entityIds.includes(existingSubcontractor.entityId))
+      return { success: false, error: 'You do not have permission to update this subcontractor' }
 
-  if (!existingSubcontractor) {
-    throw new Error('Subcontractor not found')
-  }
+    if (data.email && data.email !== existingSubcontractor.email) {
+      const duplicate = await prisma.subcontractor.findFirst({
+        where: { entityId: existingSubcontractor.entityId, email: data.email },
+      })
+      if (duplicate) return { success: false, error: 'A subcontractor with this email already exists' }
+    }
 
-  // Verify user can access this subcontractor's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingSubcontractor.entityId)) {
-    throw new Error('You do not have permission to update this subcontractor')
-  }
-
-  // If email is being changed, check for duplicates
-  if (data.email && data.email !== existingSubcontractor.email) {
-    const duplicate = await prisma.subcontractor.findFirst({
-      where: {
-        entityId: existingSubcontractor.entityId,
+    const subcontractor = await prisma.subcontractor.update({
+      where: { id },
+      data: {
+        name: data.name,
         email: data.email,
+        phone: data.phone,
+        address: data.address,
+        niNumber: data.niNumber,
+        utr: data.utr,
+        cisVerificationNumber: data.cisVerificationNumber,
+        cisStatus: data.cisStatus,
+        paymentType: data.paymentType,
+        bankDetails: data.bankDetails,
+        notes: data.notes,
       },
     })
 
-    if (duplicate) {
-      throw new Error('A subcontractor with this email already exists')
-    }
+    revalidatePath('/payroll')
+    return { success: true, data: subcontractor }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'An unexpected error occurred' }
   }
-
-  // Update subcontractor
-  const subcontractor = await prisma.subcontractor.update({
-    where: { id },
-    data: {
-      name: data.name,
-      email: data.email,
-      phone: data.phone,
-      address: data.address,
-      niNumber: data.niNumber,
-      utr: data.utr,
-      cisVerificationNumber: data.cisVerificationNumber,
-      cisStatus: data.cisStatus,
-      paymentType: data.paymentType,
-      bankDetails: data.bankDetails,
-      notes: data.notes,
-    },
-  })
-
-  revalidatePath('/payroll')
-  return subcontractor
 }
 
 /**

@@ -47,12 +47,13 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
   const onSubmit = async (data: EmployeeFormData) => {
     setIsSubmitting(true)
     setError(null)
-
     try {
-      if (employee) {
-        await updateEmployee(employee.id, data)
-      } else {
-        await createEmployee(data)
+      const result = employee
+        ? await updateEmployee(employee.id, data)
+        : await createEmployee(data)
+      if (result && 'success' in result && !result.success) {
+        setError(result.error ?? 'An error occurred')
+        return
       }
       onSuccess?.()
     } catch (err) {

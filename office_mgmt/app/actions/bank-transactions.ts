@@ -295,76 +295,53 @@ export async function reconcileTransaction(
     notes?: string
   }
 ) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
-  }
+  try {
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'Unauthorized' }
 
-  const userId = session.user.id as string
+    const userId = session.user.id as string
+    const canUpdate = await hasPermission(userId, 'banking', 'update')
+    if (!canUpdate) return { success: false, error: 'You do not have permission to reconcile transactions' }
 
-  // Check permission
-  const canUpdate = await hasPermission(userId, 'banking', 'update')
-  if (!canUpdate) {
-    throw new Error('You do not have permission to reconcile transactions')
-  }
+    const existingTransaction = await prisma.bankTransaction.findUnique({ where: { id } })
+    if (!existingTransaction) return { success: false, error: 'Transaction not found' }
 
-  // Get the existing transaction
-  const existingTransaction = await prisma.bankTransaction.findUnique({
-    where: { id },
-  })
+    const entityIds = await getAccessibleEntityIds(userId)
+    if (!entityIds.includes(existingTransaction.entityId))
+      return { success: false, error: 'You do not have permission to reconcile this transaction' }
 
-  if (!existingTransaction) {
-    throw new Error('Transaction not found')
-  }
+    if (data.invoiceId) {
+      const invoice = await prisma.invoice.findUnique({ where: { id: data.invoiceId } })
+      if (!invoice) return { success: false, error: 'Invoice not found' }
+      if (invoice.entityId !== existingTransaction.entityId)
+        return { success: false, error: 'Invoice does not belong to the same entity' }
+    }
 
-  // Verify user can access this transaction's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingTransaction.entityId)) {
-    throw new Error('You do not have permission to reconcile this transaction')
-  }
+    if (data.linkedTimesheetId) {
+      const timesheet = await prisma.timesheet.findUnique({ where: { id: data.linkedTimesheetId } })
+      if (!timesheet) return { success: false, error: 'Timesheet not found' }
+      if (timesheet.entityId !== existingTransaction.entityId)
+        return { success: false, error: 'Timesheet does not belong to the same entity' }
+    }
 
-  // If linking to invoice, verify it exists and belongs to same entity
-  if (data.invoiceId) {
-    const invoice = await prisma.invoice.findUnique({
-      where: { id: data.invoiceId },
+    const transaction = await prisma.bankTransaction.update({
+      where: { id },
+      data: {
+        invoiceId: data.invoiceId,
+        linkedTimesheetId: data.linkedTimesheetId,
+        documentUrl: data.documentUrl,
+        notes: data.notes,
+        reconciled: true,
+        reconciliationDate: new Date(),
+        reconciledBy: userId,
+      },
     })
-    if (!invoice) {
-      throw new Error('Invoice not found')
-    }
-    if (invoice.entityId !== existingTransaction.entityId) {
-      throw new Error('Invoice does not belong to the same entity')
-    }
+
+    revalidatePath('/banking')
+    return { success: true, data: transaction }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'An unexpected error occurred' }
   }
-
-  // If linking to timesheet, verify it exists and belongs to same entity
-  if (data.linkedTimesheetId) {
-    const timesheet = await prisma.timesheet.findUnique({
-      where: { id: data.linkedTimesheetId },
-    })
-    if (!timesheet) {
-      throw new Error('Timesheet not found')
-    }
-    if (timesheet.entityId !== existingTransaction.entityId) {
-      throw new Error('Timesheet does not belong to the same entity')
-    }
-  }
-
-  // Update transaction
-  const transaction = await prisma.bankTransaction.update({
-    where: { id },
-    data: {
-      invoiceId: data.invoiceId,
-      linkedTimesheetId: data.linkedTimesheetId,
-      documentUrl: data.documentUrl,
-      notes: data.notes,
-      reconciled: true,
-      reconciliationDate: new Date(),
-      reconciledBy: userId,
-    },
-  })
-
-  revalidatePath('/banking')
-  return transaction
 }
 
 /**

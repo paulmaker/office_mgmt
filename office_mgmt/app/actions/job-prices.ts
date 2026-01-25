@@ -104,56 +104,39 @@ export async function createJobPrice(data: {
   isActive?: boolean
   notes?: string
 }) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
+  try {
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'Unauthorized' }
+
+    const userId = session.user.id as string
+    const canCreate = await hasPermission(userId, 'jobPrices', 'create')
+    if (!canCreate) return { success: false, error: 'You do not have permission to create job prices' }
+
+    const userEntity = await getUserEntity(userId)
+    if (!userEntity) return { success: false, error: 'User entity not found' }
+
+    const client = await prisma.client.findUnique({ where: { id: data.clientId } })
+    if (!client) return { success: false, error: 'Client not found' }
+    if (client.entityId !== userEntity.entityId) return { success: false, error: 'Client does not belong to your entity' }
+
+    const jobPrice = await prisma.jobPrice.create({
+      data: {
+        entityId: userEntity.entityId,
+        clientId: data.clientId,
+        jobType: data.jobType,
+        description: data.description,
+        price: data.price,
+        isActive: data.isActive ?? true,
+        notes: data.notes,
+      },
+      include: { client: true },
+    })
+
+    revalidatePath('/job-prices')
+    return { success: true, data: jobPrice }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'An unexpected error occurred' }
   }
-
-  const userId = session.user.id as string
-
-  // Check permission
-  const canCreate = await hasPermission(userId, 'jobPrices', 'create')
-  if (!canCreate) {
-    throw new Error('You do not have permission to create job prices')
-  }
-
-  // Get user's entity
-  const userEntity = await getUserEntity(userId)
-  if (!userEntity) {
-    throw new Error('User entity not found')
-  }
-
-  // Verify client belongs to user's entity
-  const client = await prisma.client.findUnique({
-    where: { id: data.clientId },
-  })
-
-  if (!client) {
-    throw new Error('Client not found')
-  }
-
-  if (client.entityId !== userEntity.entityId) {
-    throw new Error('Client does not belong to your entity')
-  }
-
-  // Create job price
-  const jobPrice = await prisma.jobPrice.create({
-    data: {
-      entityId: userEntity.entityId,
-      clientId: data.clientId,
-      jobType: data.jobType,
-      description: data.description,
-      price: data.price,
-      isActive: data.isActive ?? true,
-      notes: data.notes,
-    },
-    include: {
-      client: true,
-    },
-  })
-
-  revalidatePath('/job-prices')
-  return jobPrice
 }
 
 /**
@@ -170,53 +153,40 @@ export async function updateJobPrice(
     notes?: string
   }
 ) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
+  try {
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'Unauthorized' }
+
+    const userId = session.user.id as string
+    const canUpdate = await hasPermission(userId, 'jobPrices', 'update')
+    if (!canUpdate) return { success: false, error: 'You do not have permission to update job prices' }
+
+    const existingJobPrice = await prisma.jobPrice.findUnique({ where: { id } })
+    if (!existingJobPrice) return { success: false, error: 'Job price not found' }
+
+    const entityIds = await getAccessibleEntityIds(userId)
+    if (!entityIds.includes(existingJobPrice.entityId))
+      return { success: false, error: 'You do not have permission to update this job price' }
+
+    const jobPrice = await prisma.jobPrice.update({
+      where: { id },
+      data: {
+        clientId: data.clientId,
+        jobType: data.jobType,
+        description: data.description,
+        price: data.price,
+        isActive: data.isActive,
+        notes: data.notes,
+      },
+      include: { client: true },
+    })
+
+    revalidatePath('/job-prices')
+    revalidatePath(`/job-prices/${id}`)
+    return { success: true, data: jobPrice }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'An unexpected error occurred' }
   }
-
-  const userId = session.user.id as string
-
-  // Check permission
-  const canUpdate = await hasPermission(userId, 'jobPrices', 'update')
-  if (!canUpdate) {
-    throw new Error('You do not have permission to update job prices')
-  }
-
-  // Get the existing job price
-  const existingJobPrice = await prisma.jobPrice.findUnique({
-    where: { id },
-  })
-
-  if (!existingJobPrice) {
-    throw new Error('Job price not found')
-  }
-
-  // Verify user can access this job price's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingJobPrice.entityId)) {
-    throw new Error('You do not have permission to update this job price')
-  }
-
-  // Update job price
-  const jobPrice = await prisma.jobPrice.update({
-    where: { id },
-    data: {
-      clientId: data.clientId,
-      jobType: data.jobType,
-      description: data.description,
-      price: data.price,
-      isActive: data.isActive,
-      notes: data.notes,
-    },
-    include: {
-      client: true,
-    },
-  })
-
-  revalidatePath('/job-prices')
-  revalidatePath(`/job-prices/${id}`)
-  return jobPrice
 }
 
 /**

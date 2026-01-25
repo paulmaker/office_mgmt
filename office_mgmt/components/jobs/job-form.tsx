@@ -178,10 +178,12 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
         })),
       }
 
-      if (job) {
-        await updateJob(job.id, jobData)
-      } else {
-        await createJob(jobData)
+      const result = job
+        ? await updateJob(job.id, jobData)
+        : await createJob(jobData)
+      if (result && 'success' in result && !result.success) {
+        setError(result.error ?? 'An error occurred')
+        return
       }
       onSuccess?.()
     } catch (err) {

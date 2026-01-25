@@ -98,46 +98,40 @@ export async function createAsset(data: {
   remindersEnabled?: boolean
   notes?: string
 }) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
+  try {
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'Unauthorized' }
+
+    const userId = session.user.id as string
+    const canCreate = await hasPermission(userId, 'assets', 'create')
+    if (!canCreate) return { success: false, error: 'You do not have permission to create assets' }
+
+    const userEntity = await getUserEntity(userId)
+    if (!userEntity) return { success: false, error: 'User entity not found' }
+
+    const asset = await prisma.companyAsset.create({
+      data: {
+        entityId: userEntity.entityId,
+        type: data.type,
+        name: data.name,
+        registrationNumber: data.registrationNumber,
+        motDueDate: data.motDueDate,
+        taxDueDate: data.taxDueDate,
+        insuranceDueDate: data.insuranceDueDate,
+        serviceDueDate: data.serviceDueDate,
+        leaseExpiryDate: data.leaseExpiryDate,
+        merseyFlow: data.merseyFlow ?? true,
+        companyCar: data.companyCar ?? true,
+        remindersEnabled: data.remindersEnabled ?? true,
+        notes: data.notes,
+      },
+    })
+
+    revalidatePath('/assets')
+    return { success: true, data: asset }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'An unexpected error occurred' }
   }
-
-  const userId = session.user.id as string
-
-  // Check permission
-  const canCreate = await hasPermission(userId, 'assets', 'create')
-  if (!canCreate) {
-    throw new Error('You do not have permission to create assets')
-  }
-
-  // Get user's entity
-  const userEntity = await getUserEntity(userId)
-  if (!userEntity) {
-    throw new Error('User entity not found')
-  }
-
-  // Create asset scoped to user's entity
-  const asset = await prisma.companyAsset.create({
-    data: {
-      entityId: userEntity.entityId,
-      type: data.type,
-      name: data.name,
-      registrationNumber: data.registrationNumber,
-      motDueDate: data.motDueDate,
-      taxDueDate: data.taxDueDate,
-      insuranceDueDate: data.insuranceDueDate,
-      serviceDueDate: data.serviceDueDate,
-      leaseExpiryDate: data.leaseExpiryDate,
-      merseyFlow: data.merseyFlow ?? true,
-      companyCar: data.companyCar ?? true,
-      remindersEnabled: data.remindersEnabled ?? true,
-      notes: data.notes,
-    },
-  })
-
-  revalidatePath('/assets')
-  return asset
 }
 
 /**
@@ -160,56 +154,45 @@ export async function updateAsset(
     notes?: string
   }
 ) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
+  try {
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'Unauthorized' }
+
+    const userId = session.user.id as string
+    const canUpdate = await hasPermission(userId, 'assets', 'update')
+    if (!canUpdate) return { success: false, error: 'You do not have permission to update assets' }
+
+    const existingAsset = await prisma.companyAsset.findUnique({ where: { id } })
+    if (!existingAsset) return { success: false, error: 'Asset not found' }
+
+    const entityIds = await getAccessibleEntityIds(userId)
+    if (!entityIds.includes(existingAsset.entityId))
+      return { success: false, error: 'You do not have permission to update this asset' }
+
+    const asset = await prisma.companyAsset.update({
+      where: { id },
+      data: {
+        type: data.type,
+        name: data.name,
+        registrationNumber: data.registrationNumber,
+        motDueDate: data.motDueDate,
+        taxDueDate: data.taxDueDate,
+        insuranceDueDate: data.insuranceDueDate,
+        serviceDueDate: data.serviceDueDate,
+        leaseExpiryDate: data.leaseExpiryDate,
+        merseyFlow: data.merseyFlow,
+        companyCar: data.companyCar,
+        remindersEnabled: data.remindersEnabled,
+        notes: data.notes,
+      },
+    })
+
+    revalidatePath('/assets')
+    revalidatePath(`/assets/${id}`)
+    return { success: true, data: asset }
+  } catch (e) {
+    return { success: false, error: e instanceof Error ? e.message : 'An unexpected error occurred' }
   }
-
-  const userId = session.user.id as string
-
-  // Check permission
-  const canUpdate = await hasPermission(userId, 'assets', 'update')
-  if (!canUpdate) {
-    throw new Error('You do not have permission to update assets')
-  }
-
-  // Get the existing asset
-  const existingAsset = await prisma.companyAsset.findUnique({
-    where: { id },
-  })
-
-  if (!existingAsset) {
-    throw new Error('Asset not found')
-  }
-
-  // Verify user can access this asset's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingAsset.entityId)) {
-    throw new Error('You do not have permission to update this asset')
-  }
-
-  // Update asset
-  const asset = await prisma.companyAsset.update({
-    where: { id },
-    data: {
-      type: data.type,
-      name: data.name,
-      registrationNumber: data.registrationNumber,
-      motDueDate: data.motDueDate,
-      taxDueDate: data.taxDueDate,
-      insuranceDueDate: data.insuranceDueDate,
-      serviceDueDate: data.serviceDueDate,
-      leaseExpiryDate: data.leaseExpiryDate,
-      merseyFlow: data.merseyFlow,
-      companyCar: data.companyCar,
-      remindersEnabled: data.remindersEnabled,
-      notes: data.notes,
-    },
-  })
-
-  revalidatePath('/assets')
-  revalidatePath(`/assets/${id}`)
-  return asset
 }
 
 /**
