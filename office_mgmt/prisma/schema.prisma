@@ -224,18 +224,29 @@ model Invoice {
   clientId          String?
   subcontractorId   String?
   supplierId        String?       // For purchase invoices from suppliers
+  jobId             String?       // Link to job (for job balance tracking)
   date              DateTime      @default(now())
   dueDate           DateTime
+  sentDate          DateTime?     // Date invoice was sent (sales)
+  receivedDate      DateTime?     // Date invoice was received (purchase)
   subtotal          Float
+  discountAmount    Float         @default(0)
+  discountPercentage Float        @default(0)
+  discountType      String?       // "PERCENTAGE" | "FIXED"
   vatAmount         Float         @default(0)
   vatRate           Float         @default(20)
   cisDeduction      Float         @default(0)
   cisRate           Float         @default(0)
   reverseCharge     Boolean       @default(false)
   total             Float
+  paidAmount        Float         @default(0)
+  outstandingAmount Float         // Calculated: total - paidAmount
   status            InvoiceStatus @default(DRAFT)
   paymentDate       DateTime?
   paymentMethod     String?
+  paymentReference  String?       // Bank reference, cheque number, etc.
+  purchaseOrderNumber String?     // PO number from client
+  description       String?       // General description (top-level)
   lineItems         Json          // Array of line items (can include jobId references)
   notes             String?
   createdAt         DateTime      @default(now())
@@ -245,10 +256,13 @@ model Invoice {
   client            Client?       @relation("ClientSalesInvoices", fields: [clientId], references: [id])
   subcontractor     Subcontractor? @relation("SubcontractorPurchaseInvoices", fields: [subcontractorId], references: [id])
   supplier          Supplier?     @relation("SupplierPurchaseInvoices", fields: [supplierId], references: [id])
+  job               Job?         @relation(fields: [jobId], references: [id])
   bankTransactions  BankTransaction[]
 
   @@unique([entityId, invoiceNumber])
   @@index([entityId])
+  @@index([status])
+  @@index([dueDate])
 }
 
 model Timesheet {
@@ -408,6 +422,8 @@ model Job {
   jobDescription    String
   dateWorkCommenced DateTime
   price             Float       // Total price (sum of line items)
+  balance           Float       @default(0)  // Current balance (price - paid invoices)
+  lastBalanceUpdate DateTime?   // Last time balance was updated
   status            JobStatus  @default(PENDING)
   invoicePaid       Boolean    @default(false)
   invoiceId         String?    // Link to invoice when invoiced
@@ -419,6 +435,7 @@ model Job {
   client            Client     @relation(fields: [clientId], references: [id])
   employees         JobEmployee[]
   lineItems         JobLineItem[]
+  invoices          Invoice[]  // Invoices linked to this job
 
   @@unique([entityId, jobNumber])
   @@index([entityId])

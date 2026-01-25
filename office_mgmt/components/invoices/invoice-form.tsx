@@ -9,11 +9,11 @@ import { createInvoice, updateInvoice, getInvoice } from '@/app/actions/invoices
 import { getClients } from '@/app/actions/clients'
 import { getSubcontractors } from '@/app/actions/subcontractors'
 import { getSuppliers } from '@/app/actions/suppliers'
-import { getJobsByClient } from '@/app/actions/jobs'
+import { getJobsByClient, getJobs } from '@/app/actions/jobs'
 import { getJobPrices } from '@/app/actions/job-prices'
 import { formatCurrency } from '@/lib/utils'
 import { Plus, Trash2 } from 'lucide-react'
-import type { Invoice, Client, Subcontractor, Supplier, InvoiceType, InvoiceStatus } from '@prisma/client'
+import type { Invoice, Client, Subcontractor, Supplier, Job, InvoiceType, InvoiceStatus } from '@prisma/client'
 
 interface InvoiceLineItem {
   jobId?: string
@@ -29,8 +29,16 @@ interface InvoiceFormData {
   clientId?: string
   subcontractorId?: string
   supplierId?: string
+  jobId?: string
   date: string
   dueDate: string
+  sentDate?: string
+  receivedDate?: string
+  description?: string
+  purchaseOrderNumber?: string
+  discountAmount?: number
+  discountPercentage?: number
+  discountType?: string
   lineItems: InvoiceLineItem[]
   vatRate: number
   reverseCharge: boolean
@@ -53,6 +61,7 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
   const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [availableJobs, setAvailableJobs] = useState<any[]>([])
+  const [allJobs, setAllJobs] = useState<Job[]>([])
   const [jobPrices, setJobPrices] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -70,8 +79,16 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
           clientId: invoice.clientId || undefined,
           subcontractorId: invoice.subcontractorId || undefined,
           supplierId: invoice.supplierId || undefined,
+          jobId: (invoice as any).jobId || undefined,
           date: invoice.date.toISOString().split('T')[0],
           dueDate: invoice.dueDate.toISOString().split('T')[0],
+          sentDate: (invoice as any).sentDate ? new Date((invoice as any).sentDate).toISOString().split('T')[0] : undefined,
+          receivedDate: (invoice as any).receivedDate ? new Date((invoice as any).receivedDate).toISOString().split('T')[0] : undefined,
+          description: (invoice as any).description || '',
+          purchaseOrderNumber: (invoice as any).purchaseOrderNumber || '',
+          discountAmount: (invoice as any).discountAmount || 0,
+          discountPercentage: (invoice as any).discountPercentage || 0,
+          discountType: (invoice as any).discountType || undefined,
           lineItems: (invoice.lineItems as any) || [],
           vatRate: invoice.vatRate,
           reverseCharge: invoice.reverseCharge,
@@ -87,6 +104,8 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
           cisDeduction: 0,
           cisRate: 0,
           status: 'DRAFT',
+          discountAmount: 0,
+          discountPercentage: 0,
           lineItems: [{ description: '', amount: 0 }],
         },
   })
@@ -101,8 +120,22 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
   const watchedLineItems = watch('lineItems')
   const reverseCharge = watch('reverseCharge')
   const vatRate = watch('vatRate')
+  const discountType = watch('discountType')
+  const discountAmount = watch('discountAmount') || 0
+  const discountPercentage = watch('discountPercentage') || 0
 
-  const subtotal = watchedLineItems?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0
+  // Calculate subtotal from line items
+  let subtotal = watchedLineItems?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0
+  
+  // Apply discount
+  let discount = 0
+  if (discountType === 'PERCENTAGE' && discountPercentage > 0) {
+    discount = subtotal * (discountPercentage / 100)
+  } else if (discountType === 'FIXED' && discountAmount > 0) {
+    discount = discountAmount
+  }
+  subtotal = subtotal - discount
+  
   const vatAmount = reverseCharge ? 0 : subtotal * ((vatRate || 0) / 100)
   const cisDeduction = watch('cisDeduction') || 0
   const total = subtotal + vatAmount - cisDeduction
@@ -111,14 +144,16 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
     const loadData = async () => {
       try {
         setIsLoading(true)
-        const [clientsData, subcontractorsData, suppliersData] = await Promise.all([
+        const [clientsData, subcontractorsData, suppliersData, jobsData] = await Promise.all([
           getClients(),
           getSubcontractors(),
           getSuppliers(),
+          getJobs(),
         ])
         setClients(clientsData)
         setSubcontractors(subcontractorsData)
         setSuppliers(suppliersData)
+        setAllJobs(jobsData as Job[])
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load data')
       } finally {
@@ -201,6 +236,9 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
         ...data,
         date: new Date(data.date),
         dueDate: new Date(data.dueDate),
+        sentDate: data.sentDate ? new Date(data.sentDate) : undefined,
+        receivedDate: data.receivedDate ? new Date(data.receivedDate) : undefined,
+        discountAmount: discount,
         lineItems: data.lineItems.map(item => ({
           jobId: item.jobId,
           jobNumber: item.jobNumber,
@@ -360,6 +398,72 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
         </div>
       </div>
 
+      {/* Date Tracking */}
+      <div className="grid grid-cols-2 gap-4">
+        {invoiceType === 'SALES' ? (
+          <div className="space-y-2">
+            <Label htmlFor="sentDate">Date Sent</Label>
+            <Input
+              id="sentDate"
+              type="date"
+              {...register('sentDate')}
+            />
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <Label htmlFor="receivedDate">Date Received</Label>
+            <Input
+              id="receivedDate"
+              type="date"
+              {...register('receivedDate')}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Description */}
+      <div className="space-y-2">
+        <Label htmlFor="description">Description</Label>
+        <textarea
+          id="description"
+          {...register('description')}
+          className="flex min-h-[60px] w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+          rows={2}
+          placeholder="General description for this invoice"
+        />
+      </div>
+
+      {/* References */}
+      <div className="space-y-2">
+        <Label htmlFor="purchaseOrderNumber">Purchase Order Number</Label>
+        <Input
+          id="purchaseOrderNumber"
+          {...register('purchaseOrderNumber')}
+          placeholder="PO-12345"
+        />
+      </div>
+
+      {/* Job Selection */}
+      {invoiceType === 'SALES' && allJobs.length > 0 && (
+        <div className="space-y-2">
+          <Label htmlFor="jobId">Link to Job (Optional)</Label>
+          <select
+            id="jobId"
+            {...register('jobId')}
+            className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+          >
+            <option value="">No job linked</option>
+            {allJobs
+              .filter(job => !selectedClientId || job.clientId === selectedClientId)
+              .map((job) => (
+                <option key={job.id} value={job.id}>
+                  {job.jobNumber} - {job.jobDescription}
+                </option>
+              ))}
+          </select>
+        </div>
+      )}
+
       {/* Job Prices Selection for Sales Invoices */}
       {invoiceType === 'SALES' && selectedClientId && jobPrices.length > 0 && (
         <div className="space-y-2 p-4 bg-green-50 rounded-lg border border-green-200">
@@ -483,7 +587,55 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
             <tfoot className="bg-gray-50 border-t-2">
               <tr>
                 <td colSpan={2} className="px-3 py-2 text-right font-medium">
-                  Subtotal:
+                  Subtotal (before discount):
+                </td>
+                <td className="px-3 py-2 font-medium">
+                  {formatCurrency(watchedLineItems?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0)}
+                </td>
+              </tr>
+              <tr>
+                <td colSpan={2} className="px-3 py-2 text-right">
+                  <div className="flex items-center gap-2 justify-end">
+                    <Label className="text-xs font-normal">Discount:</Label>
+                    <select
+                      {...register('discountType')}
+                      className="h-7 text-xs border border-gray-300 rounded px-2"
+                    >
+                      <option value="">No discount</option>
+                      <option value="PERCENTAGE">Percentage</option>
+                      <option value="FIXED">Fixed Amount</option>
+                    </select>
+                    {discountType === 'PERCENTAGE' && (
+                      <Input
+                        type="number"
+                        step="0.1"
+                        {...register('discountPercentage', { valueAsNumber: true, min: 0, max: 100 })}
+                        className="w-20 h-7 text-xs"
+                        placeholder="%"
+                      />
+                    )}
+                    {discountType === 'FIXED' && (
+                      <Input
+                        type="number"
+                        step="0.01"
+                        {...register('discountAmount', { valueAsNumber: true, min: 0 })}
+                        className="w-24 h-7 text-xs"
+                        placeholder="Amount"
+                      />
+                    )}
+                  </div>
+                </td>
+                <td className="px-3 py-2">
+                  {discount > 0 ? (
+                    <span className="text-red-600">-{formatCurrency(discount)}</span>
+                  ) : (
+                    <span className="text-gray-400">£0.00</span>
+                  )}
+                </td>
+              </tr>
+              <tr>
+                <td colSpan={2} className="px-3 py-2 text-right font-medium">
+                  Subtotal (after discount):
                 </td>
                 <td className="px-3 py-2 font-medium">
                   {formatCurrency(subtotal)}

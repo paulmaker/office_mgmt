@@ -57,13 +57,18 @@ export async function getInvoices() {
       client: true,
       subcontractor: true,
       supplier: true,
+      job: true,
     },
     orderBy: {
       createdAt: 'desc',
     },
   })
-
-  return invoices
+  
+  // Calculate outstandingAmount for each invoice
+  return invoices.map(inv => ({
+    ...inv,
+    outstandingAmount: inv.total - inv.paidAmount,
+  }))
 }
 
 /**
@@ -90,6 +95,7 @@ export async function getInvoice(id: string) {
       client: true,
       subcontractor: true,
       supplier: true,
+      job: true,
     },
   })
 
@@ -103,7 +109,11 @@ export async function getInvoice(id: string) {
     throw new Error('You do not have permission to access this invoice')
   }
 
-  return invoice
+  // Calculate outstandingAmount
+  return {
+    ...invoice,
+    outstandingAmount: invoice.total - invoice.paidAmount,
+  }
 }
 
 /**
@@ -114,13 +124,21 @@ export async function createInvoice(data: {
   clientId?: string
   subcontractorId?: string
   supplierId?: string
+  jobId?: string
   date: Date
   dueDate: Date
+  sentDate?: Date
+  receivedDate?: Date
   lineItems: InvoiceLineItem[]
+  description?: string
+  discountAmount?: number
+  discountPercentage?: number
+  discountType?: string
   vatRate?: number
   reverseCharge?: boolean
   cisDeduction?: number
   cisRate?: number
+  purchaseOrderNumber?: string
   status?: InvoiceStatus
   notes?: string
 }) {
@@ -166,9 +184,20 @@ export async function createInvoice(data: {
   }
 
   // Calculate subtotal from line items
-  const subtotal = data.lineItems.reduce((sum, item) => sum + item.amount, 0)
+  let subtotal = data.lineItems.reduce((sum, item) => sum + item.amount, 0)
 
-  // Calculate VAT
+  // Apply discount
+  const discountAmount = data.discountAmount || 0
+  const discountPercentage = data.discountPercentage || 0
+  let discount = 0
+  if (data.discountType === 'PERCENTAGE' && discountPercentage > 0) {
+    discount = subtotal * (discountPercentage / 100)
+  } else if (data.discountType === 'FIXED' && discountAmount > 0) {
+    discount = discountAmount
+  }
+  subtotal = subtotal - discount
+
+  // Calculate VAT on discounted subtotal
   let vatAmount = 0
   if (!data.reverseCharge && data.vatRate) {
     vatAmount = subtotal * (data.vatRate / 100)
@@ -176,6 +205,7 @@ export async function createInvoice(data: {
 
   // Calculate total
   const total = subtotal + vatAmount - (data.cisDeduction || 0)
+  const outstandingAmount = total // New invoice has no payments yet
 
   // Check if invoice number already exists in entity
   const existing = await prisma.invoice.findFirst({
@@ -198,16 +228,26 @@ export async function createInvoice(data: {
       clientId: data.clientId,
       subcontractorId: data.subcontractorId,
       supplierId: data.supplierId,
+      jobId: data.jobId,
       date: data.date,
       dueDate: data.dueDate,
+      sentDate: data.sentDate,
+      receivedDate: data.receivedDate,
       subtotal,
+      discountAmount: discount,
+      discountPercentage: data.discountPercentage || 0,
+      discountType: data.discountType,
       vatAmount,
       vatRate: data.vatRate || 20,
       reverseCharge: data.reverseCharge || false,
       cisDeduction: data.cisDeduction || 0,
       cisRate: data.cisRate || 0,
       total,
+      paidAmount: 0,
+      outstandingAmount,
       status: data.status || 'DRAFT',
+      purchaseOrderNumber: data.purchaseOrderNumber,
+      description: data.description,
       lineItems: data.lineItems as any,
       notes: data.notes,
     },
@@ -215,6 +255,7 @@ export async function createInvoice(data: {
       client: true,
       subcontractor: true,
       supplier: true,
+      job: true,
     },
   })
 
@@ -231,13 +272,21 @@ export async function updateInvoice(
     clientId?: string
     subcontractorId?: string
     supplierId?: string
+    jobId?: string
     date?: Date
     dueDate?: Date
+    sentDate?: Date
+    receivedDate?: Date
     lineItems?: InvoiceLineItem[]
+    description?: string
+    discountAmount?: number
+    discountPercentage?: number
+    discountType?: string
     vatRate?: number
     reverseCharge?: boolean
     cisDeduction?: number
     cisRate?: number
+    purchaseOrderNumber?: string
     status?: InvoiceStatus
     notes?: string
   }
@@ -276,6 +325,18 @@ export async function updateInvoice(
     subtotal = data.lineItems.reduce((sum, item) => sum + item.amount, 0)
   }
 
+  // Apply discount
+  const discountAmount = data.discountAmount ?? existingInvoice.discountAmount ?? 0
+  const discountPercentage = data.discountPercentage ?? existingInvoice.discountPercentage ?? 0
+  const discountType = data.discountType ?? existingInvoice.discountType
+  let discount = 0
+  if (discountType === 'PERCENTAGE' && discountPercentage > 0) {
+    discount = subtotal * (discountPercentage / 100)
+  } else if (discountType === 'FIXED' && discountAmount > 0) {
+    discount = discountAmount
+  }
+  subtotal = subtotal - discount
+
   // Calculate VAT
   const vatRate = data.vatRate ?? existingInvoice.vatRate
   const reverseCharge = data.reverseCharge ?? existingInvoice.reverseCharge
@@ -287,6 +348,7 @@ export async function updateInvoice(
   // Calculate total
   const cisDeduction = data.cisDeduction ?? existingInvoice.cisDeduction
   const total = subtotal + vatAmount - cisDeduction
+  const outstandingAmount = total - existingInvoice.paidAmount
 
   // Update invoice
   const invoice = await prisma.invoice.update({
@@ -295,15 +357,24 @@ export async function updateInvoice(
       clientId: data.clientId,
       subcontractorId: data.subcontractorId,
       supplierId: data.supplierId,
+      jobId: data.jobId,
       date: data.date,
       dueDate: data.dueDate,
+      sentDate: data.sentDate,
+      receivedDate: data.receivedDate,
       subtotal,
+      discountAmount: discount,
+      discountPercentage: data.discountPercentage,
+      discountType: data.discountType,
       vatAmount,
       vatRate,
       reverseCharge,
       cisDeduction,
       cisRate: data.cisRate,
       total,
+      outstandingAmount,
+      purchaseOrderNumber: data.purchaseOrderNumber,
+      description: data.description,
       status: data.status,
       lineItems: data.lineItems as any,
       notes: data.notes,
@@ -312,6 +383,7 @@ export async function updateInvoice(
       client: true,
       subcontractor: true,
       supplier: true,
+      job: true,
     },
   })
 
@@ -373,6 +445,8 @@ export async function markInvoicePaid(
   data: {
     paymentDate: Date
     paymentMethod?: string
+    paymentReference?: string
+    paidAmount?: number
   }
 ) {
   const session = await auth()
@@ -403,13 +477,21 @@ export async function markInvoicePaid(
     throw new Error('You do not have permission to update this invoice')
   }
 
+  // Calculate paid amount and outstanding
+  const paidAmount = data.paidAmount ?? existingInvoice.total
+  const outstandingAmount = existingInvoice.total - paidAmount
+  const newStatus = outstandingAmount <= 0 ? 'PAID' : existingInvoice.status
+
   // Update invoice
   const invoice = await prisma.invoice.update({
     where: { id },
     data: {
-      status: 'PAID',
+      status: newStatus,
       paymentDate: data.paymentDate,
       paymentMethod: data.paymentMethod,
+      paymentReference: data.paymentReference,
+      paidAmount,
+      outstandingAmount,
     },
   })
 

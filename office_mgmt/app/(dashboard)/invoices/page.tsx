@@ -42,6 +42,17 @@ type InvoiceWithRelations = Invoice & {
   client?: { name: string; companyName: string | null } | null
   subcontractor?: { name: string } | null
   supplier?: { name: string } | null
+  job?: { jobNumber: string; jobDescription: string } | null
+  sentDate?: Date | null
+  receivedDate?: Date | null
+  description?: string | null
+  purchaseOrderNumber?: string | null
+  discountAmount?: number | null
+  discountPercentage?: number | null
+  discountType?: string | null
+  paidAmount?: number | null
+  outstandingAmount?: number | null
+  paymentReference?: string | null
 }
 
 export default function InvoicesPage() {
@@ -168,6 +179,8 @@ export default function InvoicesPage() {
     const matchesSearch =
       invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       invoice.notes?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (invoice as any).description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (invoice as any).purchaseOrderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       invoice.client?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       invoice.client?.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       invoice.subcontractor?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -200,7 +213,10 @@ export default function InvoicesPage() {
     purchase: invoices.filter(i => i.type === 'PURCHASE').length,
     overdue: invoices.filter(i => i.status === 'OVERDUE').length,
     totalValue: invoices.reduce((sum, i) => sum + i.total, 0),
-    outstanding: invoices.filter(i => i.status !== 'PAID' && i.type === 'SALES').reduce((sum, i) => sum + i.total, 0),
+    outstanding: invoices.filter(i => i.status !== 'PAID' && i.type === 'SALES').reduce((sum, i) => {
+      const outstanding = (i as any).outstandingAmount ?? (i.total - ((i as any).paidAmount ?? 0))
+      return sum + outstanding
+    }, 0),
   }
 
   return (
@@ -311,7 +327,9 @@ export default function InvoicesPage() {
                 <TableHead>Client/Supplier</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Due Date</TableHead>
-                <TableHead>Amount</TableHead>
+                <TableHead>PO Number</TableHead>
+                <TableHead>Total</TableHead>
+                <TableHead>Outstanding</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -319,37 +337,64 @@ export default function InvoicesPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
+                  <TableCell colSpan={10} className="text-center py-8">
                     <p className="text-gray-500">Loading invoices...</p>
                   </TableCell>
                 </TableRow>
               ) : filteredInvoices.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
+                  <TableCell colSpan={10} className="text-center py-8">
                     <p className="text-gray-500">No invoices found</p>
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredInvoices.map((invoice) => (
-                  <TableRow key={invoice.id}>
-                    <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
-                    <TableCell>
-                      <Badge variant={invoice.type === 'SALES' ? 'default' : 'secondary'}>
-                        {invoice.type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{getClientName(invoice)}</TableCell>
-                    <TableCell className="text-gray-500">{formatDate(invoice.date)}</TableCell>
-                    <TableCell className="text-gray-500">{formatDate(invoice.dueDate)}</TableCell>
-                    <TableCell className="font-medium">{formatCurrency(invoice.total)}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className={getInvoiceStatusColor(invoice.status)}
-                      >
-                        {invoice.status}
-                      </Badge>
-                    </TableCell>
+                filteredInvoices.map((invoice) => {
+                  const outstanding = (invoice as any).outstandingAmount ?? (invoice.total - ((invoice as any).paidAmount ?? 0))
+                  return (
+                    <TableRow key={invoice.id}>
+                      <TableCell className="font-medium">
+                        {invoice.invoiceNumber}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={invoice.type === 'SALES' ? 'default' : 'secondary'}>
+                          {invoice.type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div>{getClientName(invoice)}</div>
+                        {(invoice as any).job && (
+                          <div className="text-xs text-gray-500">Job: {(invoice as any).job.jobNumber}</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-gray-500">
+                        <div>{formatDate(invoice.date)}</div>
+                        {invoice.type === 'SALES' && (invoice as any).sentDate && (
+                          <div className="text-xs">Sent: {formatDate((invoice as any).sentDate)}</div>
+                        )}
+                        {invoice.type === 'PURCHASE' && (invoice as any).receivedDate && (
+                          <div className="text-xs">Received: {formatDate((invoice as any).receivedDate)}</div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-gray-500">{formatDate(invoice.dueDate)}</TableCell>
+                      <TableCell className="text-gray-500 text-sm">
+                        {(invoice as any).purchaseOrderNumber || '-'}
+                      </TableCell>
+                      <TableCell className="font-medium">{formatCurrency(invoice.total)}</TableCell>
+                      <TableCell>
+                        {outstanding > 0 ? (
+                          <span className="font-medium text-red-600">{formatCurrency(outstanding)}</span>
+                        ) : (
+                          <span className="text-gray-400">£0.00</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={getInvoiceStatusColor(invoice.status)}
+                        >
+                          {invoice.status}
+                        </Badge>
+                      </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button
@@ -392,7 +437,8 @@ export default function InvoicesPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
+                  )
+                })
               )}
             </TableBody>
           </Table>

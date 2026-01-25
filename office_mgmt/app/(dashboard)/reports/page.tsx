@@ -1,11 +1,12 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
 import { formatCurrency } from '@/lib/utils'
-import { Download, FileText, TrendingUp, DollarSign } from 'lucide-react'
+import { FileText, TrendingUp, DollarSign } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { redirect } from 'next/navigation'
 import { startOfMonth, subMonths, format, endOfMonth } from 'date-fns'
+import { ExportButton } from '@/components/reports/export-button'
+import { requireModule } from '@/lib/module-access'
 
 export default async function ReportsPage() {
   const session = await auth()
@@ -14,6 +15,13 @@ export default async function ReportsPage() {
   }
 
   const entityId = session.user.entityId
+
+  // Check module access
+  try {
+    await requireModule(entityId, 'reports')
+  } catch (error) {
+    redirect('/dashboard')
+  }
 
   // Calculate dates
   const now = new Date()
@@ -181,10 +189,9 @@ export default async function ReportsPage() {
             Financial reports, VAT returns, and CIS summaries
           </p>
         </div>
-        <Button>
-          <Download className="h-4 w-4 mr-2" />
+        <ExportButton reportType="all" variant="default" size="default">
           Export All
-        </Button>
+        </ExportButton>
       </div>
 
       {/* Quick Stats */}
@@ -245,10 +252,7 @@ export default async function ReportsPage() {
                 </CardTitle>
                 <CardDescription>Income statement summary</CardDescription>
               </div>
-              <Button variant="outline" size="sm">
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
+              <ExportButton reportType="profit-loss" />
             </div>
           </CardHeader>
           <CardContent>
@@ -290,10 +294,7 @@ export default async function ReportsPage() {
                 </CardTitle>
                 <CardDescription>Current quarter VAT position</CardDescription>
               </div>
-              <Button variant="outline" size="sm">
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
+              <ExportButton reportType="vat" />
             </div>
           </CardHeader>
           <CardContent>
@@ -337,10 +338,7 @@ export default async function ReportsPage() {
                 </CardTitle>
                 <CardDescription>CIS summary (Paid Timesheets)</CardDescription>
               </div>
-              <Button variant="outline" size="sm">
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
+              <ExportButton reportType="cis" />
             </div>
           </CardHeader>
           <CardContent>
@@ -378,10 +376,7 @@ export default async function ReportsPage() {
                 </CardTitle>
                 <CardDescription>Last 6 months cash flow</CardDescription>
               </div>
-              <Button variant="outline" size="sm">
-                <Download className="h-4 w-4 mr-2" />
-                Export
-              </Button>
+              <ExportButton reportType="cash-flow" />
             </div>
           </CardHeader>
           <CardContent>
