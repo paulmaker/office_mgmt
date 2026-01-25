@@ -40,18 +40,22 @@ async function getReportContext() {
 }
 
 /**
+ * UTF-8 BOM so Excel/Windows treats the file as UTF-8 (prevents "Â£" instead of "£")
+ */
+const UTF8_BOM = '\uFEFF'
+
+/**
  * Generate CSV content from data rows
  */
 function generateCSV(headers: string[], rows: (string | number)[][]): string {
   const csvRows: string[] = []
-  
+
   // Add headers
   csvRows.push(headers.map(h => `"${h}"`).join(','))
-  
+
   // Add data rows
   rows.forEach(row => {
     csvRows.push(row.map(cell => {
-      // Escape quotes and wrap in quotes if contains comma, quote, or newline
       const cellStr = String(cell)
       if (cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n')) {
         return `"${cellStr.replace(/"/g, '""')}"`
@@ -59,8 +63,8 @@ function generateCSV(headers: string[], rows: (string | number)[][]): string {
       return cellStr
     }).join(','))
   })
-  
-  return csvRows.join('\n')
+
+  return UTF8_BOM + csvRows.join('\n')
 }
 
 /**
