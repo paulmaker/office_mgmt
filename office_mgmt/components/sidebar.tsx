@@ -25,29 +25,30 @@ import {
 } from 'lucide-react'
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Clients', href: '/clients', icon: Users },
-  { name: 'Subcontractors', href: '/subcontractors', icon: Briefcase },
-  { name: 'Employees', href: '/employees', icon: UserCheck },
-  { name: 'Suppliers', href: '/suppliers', icon: Package },
-  { name: 'Jobs', href: '/jobs', icon: ClipboardList },
-  { name: 'Job Prices', href: '/job-prices', icon: DollarSign },
-  { name: 'Invoices', href: '/invoices', icon: FileText },
-  { name: 'Timesheets', href: '/timesheets', icon: Clock },
-  { name: 'CIS Payroll', href: '/payroll', icon: Banknote },
-  { name: 'Bank Reconciliation', href: '/banking', icon: CreditCard },
-  { name: 'Reports', href: '/reports', icon: BarChart3 },
-  { name: 'Assets', href: '/assets', icon: Truck },
-  { name: 'Quick Links', href: '/quick-links', icon: Link2 },
-  { name: 'Admin', href: '/admin', icon: Shield, adminOnly: true },
-  { name: 'Settings', href: '/settings', icon: Settings },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, module: null }, // Core module, always visible
+  { name: 'Clients', href: '/clients', icon: Users, module: 'clients' as const },
+  { name: 'Subcontractors', href: '/subcontractors', icon: Briefcase, module: 'subcontractors' as const },
+  { name: 'Employees', href: '/employees', icon: UserCheck, module: 'employees' as const },
+  { name: 'Suppliers', href: '/suppliers', icon: Package, module: 'suppliers' as const },
+  { name: 'Jobs', href: '/jobs', icon: ClipboardList, module: 'jobs' as const },
+  { name: 'Job Prices', href: '/job-prices', icon: DollarSign, module: 'jobPrices' as const },
+  { name: 'Invoices', href: '/invoices', icon: FileText, module: 'invoices' as const },
+  { name: 'Timesheets', href: '/timesheets', icon: Clock, module: 'timesheets' as const },
+  { name: 'CIS Payroll', href: '/payroll', icon: Banknote, module: 'payroll' as const },
+  { name: 'Bank Reconciliation', href: '/banking', icon: CreditCard, module: 'banking' as const },
+  { name: 'Reports', href: '/reports', icon: BarChart3, module: 'reports' as const },
+  { name: 'Assets', href: '/assets', icon: Truck, module: 'assets' as const },
+  { name: 'Quick Links', href: '/quick-links', icon: Link2, module: 'quickLinks' as const },
+  { name: 'Admin', href: '/admin', icon: Shield, adminOnly: true, module: null }, // Core module, always visible
+  { name: 'Settings', href: '/settings', icon: Settings, module: null }, // Core module, always visible
 ]
 
 export function Sidebar() {
   const pathname = usePathname()
   const { data: session } = useSession()
   const userRole = (session?.user as any)?.role
-  const organizationName = 'Office Manager'
+  const enabledModules = (session?.user as any)?.enabledModules || []
+  const organizationName = (session?.user as any)?.organizationName || 'Office Manager'
 
   return (
     <div className="flex h-full w-64 flex-col bg-gray-900">
@@ -58,6 +59,11 @@ export function Sidebar() {
         {navigation.map((item) => {
           // Hide admin link if user doesn't have admin role
           if (item.adminOnly && !['PLATFORM_ADMIN', 'ACCOUNT_ADMIN', 'ENTITY_ADMIN'].includes(userRole)) {
+            return null
+          }
+
+          // Hide module if it's not enabled (unless it's a core module with module: null)
+          if (item.module && !enabledModules.includes(item.module)) {
             return null
           }
 

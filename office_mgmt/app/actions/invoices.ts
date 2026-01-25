@@ -7,6 +7,7 @@ import { getUserEntity, getAccessibleEntityIds } from '@/lib/platform-core/multi
 import { revalidatePath } from 'next/cache'
 import { generateInvoiceNumber } from '@/lib/invoice-code'
 import type { InvoiceType, InvoiceStatus } from '@prisma/client'
+import { requireModule } from '@/lib/module-access'
 
 interface InvoiceLineItem {
   jobId?: string
@@ -27,6 +28,10 @@ export async function getInvoices() {
   }
 
   const userId = session.user.id as string
+  const entityId = (session.user as any).entityId
+
+  // Check module access
+  await requireModule(entityId, 'invoices')
 
   // Check permission
   const canRead = await hasPermission(userId, 'invoices', 'read')

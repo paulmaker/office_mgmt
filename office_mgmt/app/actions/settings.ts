@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma"
 import { auth } from "@/app/api/auth/[...nextauth]/route"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
+import { getAllModuleKeys, type ModuleKey } from "@/lib/module-access"
 
 // Schema for entity settings
 const settingsSchema = z.object({
@@ -31,6 +32,9 @@ const settingsSchema = z.object({
   notifyVehicleReminders: z.boolean().default(true),
   notifyCisReturn: z.boolean().default(true),
   notifyVatReturn: z.boolean().default(true),
+  
+  // Module Access
+  enabledModules: z.array(z.string()).optional(),
 })
 
 export type SettingsFormData = z.infer<typeof settingsSchema>
@@ -70,10 +74,19 @@ export async function getSettings() {
     notifyVehicleReminders: true,
     notifyCisReturn: true,
     notifyVatReturn: true,
+    // Default: all modules enabled (backward compatible)
+    enabledModules: getAllModuleKeys(),
   }
 
   // If settings exist, merge them. Otherwise return defaults.
-  return entity.settings ? { ...defaults, ...(entity.settings as object) } : defaults
+  const merged = entity.settings ? { ...defaults, ...(entity.settings as object) } : defaults
+  
+  // Ensure enabledModules is always an array
+  if (!merged.enabledModules || merged.enabledModules.length === 0) {
+    merged.enabledModules = getAllModuleKeys()
+  }
+  
+  return merged
 }
 
 export async function updateSettings(data: SettingsFormData) {
@@ -82,8 +95,23 @@ export async function updateSettings(data: SettingsFormData) {
     throw new Error("Unauthorized")
   }
 
+  // Check if user has admin role
+  const userRole = (session.user as any)?.role
+  if (!['PLATFORM_ADMIN', 'ACCOUNT_ADMIN', 'ENTITY_ADMIN'].includes(userRole)) {
+    throw new Error("Only administrators can update settings")
+  }
+
   // Validate data
   const validated = settingsSchema.parse(data)
+
+  // Validate enabledModules if provided
+  if (validated.enabledModules) {
+    const allModuleKeys = getAllModuleKeys()
+    const invalidModules = validated.enabledModules.filter(m => !allModuleKeys.includes(m as ModuleKey))
+    if (invalidModules.length > 0) {
+      throw new Error(`Invalid module keys: ${invalidModules.join(', ')}`)
+    }
+  }
 
   await prisma.entity.update({
     where: { id: session.user.entityId },
@@ -95,5 +123,6 @@ export async function updateSettings(data: SettingsFormData) {
   })
 
   revalidatePath('/settings')
+  revalidatePath('/dashboard') // Revalidate dashboard to update sidebar
   return { success: true }
 }

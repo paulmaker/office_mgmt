@@ -5,6 +5,7 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import { getUserPermissions } from "@/lib/platform-core/rbac"
 import { getUserEntity } from "@/lib/platform-core/multi-tenancy"
 import { compare } from "bcryptjs"
+import { getEnabledModules, getAllModuleKeys, type ModuleKey } from "@/lib/module-access"
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma) as any,
@@ -58,6 +59,17 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             return null
           }
           
+          // Load enabled modules from entity settings
+          let enabledModules: ModuleKey[] = []
+          try {
+            const enabledModulesSet = await getEnabledModules(user.entityId)
+            enabledModules = Array.from(enabledModulesSet)
+          } catch (error) {
+            console.error('[AUTH] Error loading enabled modules:', error)
+            // Fallback to all modules if there's an error
+            enabledModules = getAllModuleKeys()
+          }
+
           return {
             id: user.id,
             email: user.email,
@@ -67,6 +79,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             entityName: user.entity.name,
             organizationName: user.entity?.tenantAccount?.name,
             accountId: user.entity?.tenantAccountId,
+            enabledModules,
           }
         } catch (error) {
           console.error('[AUTH] Error during authorization:', error)
@@ -93,6 +106,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.entityName = (user as any).entityName
           token.organizationName = (user as any).organizationName
           token.accountId = (user as any).accountId
+          token.enabledModules = (user as any).enabledModules || getAllModuleKeys()
           
           // Load permissions and cache in JWT
           if (user.id) {
@@ -105,17 +119,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
       }
       
-      // If role changed (via trigger), refresh permissions
+      // If role changed (via trigger), refresh permissions and modules
       if (trigger === "update" && token.sub) {
         const updatedUser = await prisma.user.findUnique({
           where: { id: token.sub as string },
-          select: { role: true },
+          include: {
+            entity: {
+              select: { id: true, settings: true }
+            }
+          }
         })
         
-        if (updatedUser && updatedUser.role !== token.role) {
-          token.role = updatedUser.role
-          const permissions = await getUserPermissions(token.sub as string)
-          token.permissions = permissions
+        if (updatedUser) {
+          if (updatedUser.role !== token.role) {
+            token.role = updatedUser.role
+            const permissions = await getUserPermissions(token.sub as string)
+            token.permissions = permissions
+          }
+          
+          // Refresh enabled modules
+          try {
+            const enabledModulesSet = await getEnabledModules(updatedUser.entityId)
+            token.enabledModules = Array.from(enabledModulesSet)
+          } catch (error) {
+            console.error('[AUTH] Error refreshing enabled modules:', error)
+          }
         }
       }
       
@@ -131,6 +159,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           organizationName?: string
           accountId?: string
           permissions?: string[]
+          enabledModules?: ModuleKey[]
         }
         
         if (tokenData.sub) {
@@ -153,6 +182,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
         if (tokenData.permissions) {
           (session.user as any).permissions = tokenData.permissions
+        }
+        if (tokenData.enabledModules) {
+          (session.user as any).enabledModules = tokenData.enabledModules
+        } else {
+          // Fallback to all modules if not set
+          (session.user as any).enabledModules = getAllModuleKeys()
         }
       }
       return session

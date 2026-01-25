@@ -6,6 +6,7 @@ import { hasPermission } from '@/lib/platform-core/rbac'
 import { getUserEntity, getAccessibleEntityIds } from '@/lib/platform-core/multi-tenancy'
 import { revalidatePath } from 'next/cache'
 import type { CISStatus, PaymentType } from '@prisma/client'
+import { requireModule } from '@/lib/module-access'
 
 /**
  * Get all subcontractors for the current user's accessible entities
@@ -17,6 +18,10 @@ export async function getSubcontractors() {
   }
 
   const userId = session.user.id as string
+  const entityId = (session.user as any).entityId
+
+  // Check module access
+  await requireModule(entityId, 'subcontractors')
 
   // Check permission
   const canRead = await hasPermission(userId, 'subcontractors', 'read')

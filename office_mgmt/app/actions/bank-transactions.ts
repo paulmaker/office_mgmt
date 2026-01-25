@@ -6,6 +6,7 @@ import { hasPermission } from '@/lib/platform-core/rbac'
 import { getUserEntity, getAccessibleEntityIds } from '@/lib/platform-core/multi-tenancy'
 import { revalidatePath } from 'next/cache'
 import type { TransactionType } from '@prisma/client'
+import { requireModule } from '@/lib/module-access'
 
 /**
  * Get all bank transactions for the current user's accessible entities
@@ -22,6 +23,10 @@ export async function getBankTransactions(filters?: {
   }
 
   const userId = session.user.id as string
+  const entityId = (session.user as any).entityId
+
+  // Check module access
+  await requireModule(entityId, 'banking')
 
   // Check permission
   const canRead = await hasPermission(userId, 'banking', 'read')

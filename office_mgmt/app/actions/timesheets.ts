@@ -7,6 +7,7 @@ import { getUserEntity, getAccessibleEntityIds } from '@/lib/platform-core/multi
 import { revalidatePath } from 'next/cache'
 import { calculateCISDeduction } from '@/lib/utils'
 import type { TimesheetStatus, CISStatus } from '@prisma/client'
+import { requireModule } from '@/lib/module-access'
 
 /**
  * Get all timesheets for the current user's accessible entities
@@ -18,6 +19,10 @@ export async function getTimesheets() {
   }
 
   const userId = session.user.id as string
+  const entityId = (session.user as any).entityId
+
+  // Check module access
+  await requireModule(entityId, 'timesheets')
 
   // Check permission
   const canRead = await hasPermission(userId, 'timesheets', 'read')

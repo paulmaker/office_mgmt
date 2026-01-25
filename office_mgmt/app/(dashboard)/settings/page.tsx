@@ -6,17 +6,25 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Save, Building2, Users, Bell, Database, Mail, Loader2 } from 'lucide-react'
+import { Save, Building2, Users, Bell, Database, Mail, Loader2, Lock } from 'lucide-react'
 import { getSettings, updateSettings, type SettingsFormData } from '@/app/actions/settings'
 import { useToast } from '@/hooks/use-toast'
 import { useForm } from 'react-hook-form'
+import { MODULES, getAllModuleKeys, type ModuleKey } from '@/lib/module-access'
+import { useSession } from 'next-auth/react'
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const { toast } = useToast()
+  const { data: session } = useSession()
   
-  const { register, handleSubmit, reset, watch } = useForm<SettingsFormData>()
+  const { register, handleSubmit, reset, watch, setValue } = useForm<SettingsFormData>()
+  const enabledModules = watch('enabledModules') || getAllModuleKeys()
+  
+  // Check if user is admin
+  const userRole = (session?.user as any)?.role
+  const isAdmin = ['PLATFORM_ADMIN', 'ACCOUNT_ADMIN', 'ENTITY_ADMIN'].includes(userRole || '')
 
   useEffect(() => {
     loadSettings()
@@ -46,14 +54,23 @@ export default function SettingsPage() {
         title: 'Settings saved',
         description: 'Your changes have been saved successfully.'
       })
-    } catch (error) {
+    } catch (error: any) {
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Failed to save settings'
+        description: error?.message || 'Failed to save settings'
       })
     } finally {
       setSaving(false)
+    }
+  }
+
+  const toggleModule = (moduleKey: ModuleKey) => {
+    const current = enabledModules || []
+    if (current.includes(moduleKey)) {
+      setValue('enabledModules', current.filter(m => m !== moduleKey))
+    } else {
+      setValue('enabledModules', [...current, moduleKey])
     }
   }
 
@@ -259,6 +276,85 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Module Access */}
+        {isAdmin && (
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lock className="h-5 w-5" />
+                Module Access
+              </CardTitle>
+              <CardDescription>
+                Control which modules are available to users in your organization. Disabled modules will be hidden from the navigation menu.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {/* People & Contacts */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-sm text-gray-700">People & Contacts</h3>
+                  <div className="space-y-3">
+                    {(['clients', 'subcontractors', 'employees', 'suppliers'] as ModuleKey[]).map((moduleKey) => (
+                      <div key={moduleKey} className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-sm">{MODULES[moduleKey].name}</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={enabledModules.includes(moduleKey)}
+                          onChange={() => toggleModule(moduleKey)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Operations */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-sm text-gray-700">Operations</h3>
+                  <div className="space-y-3">
+                    {(['jobs', 'jobPrices', 'invoices', 'timesheets'] as ModuleKey[]).map((moduleKey) => (
+                      <div key={moduleKey} className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-sm">{MODULES[moduleKey].name}</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={enabledModules.includes(moduleKey)}
+                          onChange={() => toggleModule(moduleKey)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Financial & Tools */}
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-sm text-gray-700">Financial & Tools</h3>
+                  <div className="space-y-3">
+                    {(['payroll', 'banking', 'reports', 'assets', 'quickLinks'] as ModuleKey[]).map((moduleKey) => (
+                      <div key={moduleKey} className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-sm">{MODULES[moduleKey].name}</p>
+                        </div>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4"
+                          checked={enabledModules.includes(moduleKey)}
+                          onChange={() => toggleModule(moduleKey)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <input type="hidden" {...register('enabledModules')} />
+            </CardContent>
+          </Card>
+        )}
       </div>
     </form>
   )

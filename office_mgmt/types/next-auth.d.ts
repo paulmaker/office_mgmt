@@ -1,5 +1,6 @@
 import NextAuth, { DefaultSession } from "next-auth"
 import { JWT } from "next-auth/jwt"
+import { ModuleKey } from "@/lib/module-access"
 
 declare module "next-auth" {
   /**
@@ -14,6 +15,7 @@ declare module "next-auth" {
       organizationName?: string
       accountId?: string
       permissions?: string[]
+      enabledModules?: ModuleKey[]
     } & DefaultSession["user"]
   }
 
@@ -24,6 +26,7 @@ declare module "next-auth" {
     entityName?: string
     organizationName?: string
     accountId?: string
+    enabledModules?: ModuleKey[]
   }
 }
 
@@ -37,5 +40,6 @@ declare module "next-auth/jwt" {
     organizationName?: string
     accountId?: string
     permissions?: string[]
+    enabledModules?: ModuleKey[]
   }
 }

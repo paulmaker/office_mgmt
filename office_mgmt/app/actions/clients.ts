@@ -6,6 +6,7 @@ import { hasPermission } from '@/lib/platform-core/rbac'
 import { getUserEntity, getAccessibleEntityIds } from '@/lib/platform-core/multi-tenancy'
 import { revalidatePath } from 'next/cache'
 import { generateReferenceCode } from '@/lib/utils'
+import { requireModule } from '@/lib/module-access'
 
 /**
  * Get all clients for the current user's accessible entities
@@ -17,6 +18,10 @@ export async function getClients() {
   }
 
   const userId = session.user.id as string
+  const entityId = (session.user as any).entityId
+
+  // Check module access
+  await requireModule(entityId, 'clients')
 
   // Check permission
   const canRead = await hasPermission(userId, 'clients', 'read')
