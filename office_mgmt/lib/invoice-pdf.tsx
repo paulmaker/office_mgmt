@@ -196,14 +196,19 @@ export const InvoicePDF = ({ invoice, entity }: InvoicePDFProps) => (
           <Text style={styles.colAmount}>Amount</Text>
         </View>
         
-        {invoice.lineItems.map((item: any, index: number) => (
-          <View key={index} style={styles.tableRow}>
-            <Text style={styles.colDesc}>{item.description}</Text>
-            <Text style={styles.colQty}>{item.quantity}</Text>
-            <Text style={styles.colRate}>{formatCurrency(item.rate)}</Text>
-            <Text style={styles.colAmount}>{formatCurrency(item.amount)}</Text>
-          </View>
-        ))}
+        {invoice.lineItems.map((item: any, index: number) => {
+          // Handle missing quantity/rate: default to 1 qty and derive rate from amount
+          const quantity = item.quantity ?? 1
+          const rate = item.rate ?? item.amount
+          return (
+            <View key={index} style={styles.tableRow}>
+              <Text style={styles.colDesc}>{item.description}</Text>
+              <Text style={styles.colQty}>{quantity}</Text>
+              <Text style={styles.colRate}>{formatCurrency(rate)}</Text>
+              <Text style={styles.colAmount}>{formatCurrency(item.amount)}</Text>
+            </View>
+          )
+        })}
       </View>
 
       {/* Totals */}

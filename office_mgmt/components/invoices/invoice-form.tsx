@@ -13,6 +13,7 @@ import { getJobsByClient, getJobs } from '@/app/actions/jobs'
 import { getJobPrices } from '@/app/actions/job-prices'
 import { formatCurrency } from '@/lib/utils'
 import { Plus, Trash2 } from 'lucide-react'
+import { PDFUpload } from '@/components/banking/pdf-upload'
 import type { Invoice, Client, Subcontractor, Supplier, Job, InvoiceType, InvoiceStatus } from '@prisma/client'
 
 interface InvoiceLineItem {
@@ -45,6 +46,7 @@ interface InvoiceFormData {
   cisDeduction: number
   cisRate: number
   status: InvoiceStatus
+  documentUrl?: string
   notes?: string
 }
 
@@ -95,6 +97,7 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
           cisDeduction: invoice.cisDeduction,
           cisRate: invoice.cisRate,
           status: invoice.status,
+          documentUrl: (invoice as any).documentUrl || undefined,
           notes: invoice.notes || '',
         }
       : {
@@ -106,6 +109,7 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
           status: 'DRAFT',
           discountAmount: 0,
           discountPercentage: 0,
+          documentUrl: undefined,
           lineItems: [{ description: '', amount: 0 }],
         },
   })
@@ -239,6 +243,7 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
         sentDate: data.sentDate ? new Date(data.sentDate) : undefined,
         receivedDate: data.receivedDate ? new Date(data.receivedDate) : undefined,
         discountAmount: discount,
+        documentUrl: data.documentUrl,
         lineItems: data.lineItems.map(item => ({
           jobId: item.jobId,
           jobNumber: item.jobNumber,
@@ -422,6 +427,21 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
           </div>
         )}
       </div>
+
+      {/* PDF Document Upload for Purchase Invoices */}
+      {invoiceType === 'PURCHASE' && (
+        <div className="space-y-2 p-4 bg-gray-50 rounded-lg border border-gray-200">
+          <Label>Invoice PDF Copy</Label>
+          <PDFUpload
+            value={watch('documentUrl')}
+            onChange={(url) => setValue('documentUrl', url)}
+            onRemove={() => setValue('documentUrl', undefined)}
+          />
+          <p className="text-xs text-gray-500">
+            Upload a PDF copy of the original invoice for your records.
+          </p>
+        </div>
+      )}
 
       {/* Description */}
       <div className="space-y-2">

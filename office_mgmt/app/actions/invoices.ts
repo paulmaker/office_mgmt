@@ -139,6 +139,7 @@ export async function createInvoice(data: {
   cisDeduction?: number
   cisRate?: number
   purchaseOrderNumber?: string
+  documentUrl?: string
   status?: InvoiceStatus
   notes?: string
 }) {
@@ -244,6 +245,7 @@ export async function createInvoice(data: {
       purchaseOrderNumber: data.purchaseOrderNumber,
       description: data.description,
       lineItems: data.lineItems as any,
+      documentUrl: data.documentUrl,
       notes: data.notes,
     },
     include: {
@@ -285,6 +287,7 @@ export async function updateInvoice(
     cisDeduction?: number
     cisRate?: number
     purchaseOrderNumber?: string
+    documentUrl?: string
     status?: InvoiceStatus
     notes?: string
   }
@@ -365,6 +368,7 @@ export async function updateInvoice(
       outstandingAmount,
       purchaseOrderNumber: data.purchaseOrderNumber,
       description: data.description,
+      documentUrl: data.documentUrl,
       status: data.status,
       lineItems: data.lineItems as any,
       notes: data.notes,

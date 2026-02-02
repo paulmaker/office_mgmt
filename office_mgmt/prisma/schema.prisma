@@ -248,6 +248,7 @@ model Invoice {
   purchaseOrderNumber String?     // PO number from client
   description       String?       // General description (top-level)
   lineItems         Json          // Array of line items (can include jobId references)
+  documentUrl       String?       // PDF copy of invoice (S3 key for purchase invoices)
   notes             String?
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
