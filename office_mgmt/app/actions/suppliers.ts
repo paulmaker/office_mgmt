@@ -89,6 +89,7 @@ export async function createSupplier(data: {
   email?: string
   phone?: string
   address?: string
+  accountNumber?: string
   vatNumber?: string
   vatRegistered?: boolean
   paymentTerms?: number
@@ -113,6 +114,7 @@ export async function createSupplier(data: {
         email: data.email,
         phone: data.phone,
         address: data.address,
+        accountNumber: data.accountNumber,
         vatNumber: data.vatNumber,
         vatRegistered: data.vatRegistered ?? false,
         paymentTerms: data.paymentTerms ?? 30,
@@ -138,6 +140,7 @@ export async function updateSupplier(
     email?: string
     phone?: string
     address?: string
+    accountNumber?: string
     vatNumber?: string
     vatRegistered?: boolean
     paymentTerms?: number
@@ -167,6 +170,7 @@ export async function updateSupplier(
         email: data.email,
         phone: data.phone,
         address: data.address,
+        accountNumber: data.accountNumber,
         vatNumber: data.vatNumber,
         vatRegistered: data.vatRegistered,
         paymentTerms: data.paymentTerms,

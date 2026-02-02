@@ -122,6 +122,7 @@ export default function SuppliersPage() {
   const filteredSuppliers = suppliers.filter(supplier =>
     supplier.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     supplier.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    supplier.accountNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     supplier.email?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
@@ -165,6 +166,7 @@ export default function SuppliersPage() {
               <TableRow>
                 <TableHead>Supplier Name</TableHead>
                 <TableHead>Company</TableHead>
+                <TableHead>Account No.</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Address</TableHead>
                 <TableHead>Status</TableHead>
@@ -176,13 +178,13 @@ export default function SuppliersPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
+                  <TableCell colSpan={9} className="text-center py-8">
                     <p className="text-gray-500">Loading suppliers...</p>
                   </TableCell>
                 </TableRow>
               ) : filteredSuppliers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-8">
+                  <TableCell colSpan={9} className="text-center py-8">
                     <p className="text-gray-500">No suppliers found</p>
                   </TableCell>
                 </TableRow>
@@ -191,6 +193,7 @@ export default function SuppliersPage() {
                   <TableRow key={supplier.id}>
                     <TableCell className="font-medium">{supplier.name}</TableCell>
                     <TableCell>{supplier.companyName || '-'}</TableCell>
+                    <TableCell>{supplier.accountNumber || '-'}</TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         {supplier.email && (

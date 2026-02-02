@@ -14,6 +14,7 @@ interface SupplierFormData {
   email?: string
   phone?: string
   address?: string
+  accountNumber?: string
   vatNumber?: string
   vatRegistered: boolean
   paymentTerms: number
@@ -42,6 +43,7 @@ export function SupplierForm({ supplier, onSuccess, onCancel }: SupplierFormProp
           email: supplier.email || '',
           phone: supplier.phone || '',
           address: supplier.address || '',
+          accountNumber: supplier.accountNumber || '',
           vatNumber: supplier.vatNumber || '',
           vatRegistered: supplier.vatRegistered,
           paymentTerms: supplier.paymentTerms,
@@ -131,10 +133,17 @@ export function SupplierForm({ supplier, onSuccess, onCancel }: SupplierFormProp
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
+          <Label htmlFor="accountNumber">Account Number</Label>
+          <Input id="accountNumber" {...register('accountNumber')} placeholder="Supplier account number" />
+        </div>
+
+        <div className="space-y-2">
           <Label htmlFor="vatNumber">VAT Number</Label>
           <Input id="vatNumber" {...register('vatNumber')} />
         </div>
+      </div>
 
+      <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor="paymentTerms">Payment Terms (days)</Label>
           <Input
