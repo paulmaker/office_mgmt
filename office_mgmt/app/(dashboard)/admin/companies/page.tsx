@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,12 +15,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Plus, Briefcase, Edit, CheckCircle, XCircle } from 'lucide-react'
-import { createEntity, getEntities, updateEntity } from '@/app/actions/admin/entities'
+import { Plus, Edit, CheckCircle, XCircle, Settings, Loader2, X } from 'lucide-react'
+import { createEntity, getEntities, updateEntity, getEntitySettings, updateEntityModules } from '@/app/actions/admin/entities'
 import { getTenantAccounts } from '@/app/actions/admin/tenant-accounts'
 import { formatDate } from '@/lib/utils'
+import { MODULES, getAllModuleKeys, type ModuleKey } from '@/lib/module-access'
 
 export default function CompaniesPage() {
+  const { data: session } = useSession()
+  const isPlatformAdmin = (session?.user as any)?.role === 'PLATFORM_ADMIN'
   const [companies, setCompanies] = useState<any[]>([])
   const [organisations, setOrganisations] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -30,6 +34,13 @@ export default function CompaniesPage() {
     name: '',
     slug: '',
   })
+  
+  // Module Access state
+  const [showModules, setShowModules] = useState(false)
+  const [selectedCompany, setSelectedCompany] = useState<any>(null)
+  const [enabledModules, setEnabledModules] = useState<ModuleKey[]>(getAllModuleKeys())
+  const [modulesLoading, setModulesLoading] = useState(false)
+  const [modulesSaving, setModulesSaving] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -88,6 +99,50 @@ export default function CompaniesPage() {
     setFormData({ tenantAccountId: '', name: '', slug: '' })
   }
 
+  // Module Access handlers
+  const handleOpenModules = async (company: any) => {
+    setSelectedCompany(company)
+    setShowModules(true)
+    setModulesLoading(true)
+    try {
+      const settings = await getEntitySettings(company.id)
+      setEnabledModules(settings.enabledModules as ModuleKey[])
+    } catch (error: any) {
+      alert(error.message || 'Failed to load module settings')
+      setShowModules(false)
+    } finally {
+      setModulesLoading(false)
+    }
+  }
+
+  const handleCloseModules = () => {
+    setShowModules(false)
+    setSelectedCompany(null)
+    setEnabledModules(getAllModuleKeys())
+  }
+
+  const toggleModule = (moduleKey: ModuleKey) => {
+    if (enabledModules.includes(moduleKey)) {
+      setEnabledModules(enabledModules.filter(m => m !== moduleKey))
+    } else {
+      setEnabledModules([...enabledModules, moduleKey])
+    }
+  }
+
+  const handleSaveModules = async () => {
+    if (!selectedCompany) return
+    setModulesSaving(true)
+    try {
+      await updateEntityModules(selectedCompany.id, enabledModules)
+      alert('Module settings saved successfully')
+      handleCloseModules()
+    } catch (error: any) {
+      alert(error.message || 'Failed to save module settings')
+    } finally {
+      setModulesSaving(false)
+    }
+  }
+
   const generateSlug = (name: string) => {
     return name
       .toLowerCase()
@@ -109,6 +164,104 @@ export default function CompaniesPage() {
           Add Company
         </Button>
       </div>
+
+      {/* Module Access Configuration */}
+      {showModules && selectedCompany && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Module Access: {selectedCompany.name}
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  Control which modules are available for this company. Disabled modules will be hidden from users.
+                </CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" onClick={handleCloseModules}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {modulesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+              </div>
+            ) : (
+              <>
+                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-6">
+                  {/* People & Contacts */}
+                  <div className="space-y-4">
+                    <h3 className="font-semibold text-sm text-gray-700">People & Contacts</h3>
+                    <div className="space-y-3">
+                      {(['clients', 'subcontractors', 'employees', 'suppliers'] as ModuleKey[]).map((moduleKey) => (
+                        <div key={moduleKey} className="flex items-center justify-between">
+                          <p className="font-medium text-sm">{MODULES[moduleKey].name}</p>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={enabledModules.includes(moduleKey)}
+                            onChange={() => toggleModule(moduleKey)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Operations */}
+                  <div className="space-y-4">
+                    <h3 className="font-semibold text-sm text-gray-700">Operations</h3>
+                    <div className="space-y-3">
+                      {(['jobs', 'jobPrices', 'invoices', 'timesheets'] as ModuleKey[]).map((moduleKey) => (
+                        <div key={moduleKey} className="flex items-center justify-between">
+                          <p className="font-medium text-sm">{MODULES[moduleKey].name}</p>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={enabledModules.includes(moduleKey)}
+                            onChange={() => toggleModule(moduleKey)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Financial & Tools */}
+                  <div className="space-y-4">
+                    <h3 className="font-semibold text-sm text-gray-700">Financial & Tools</h3>
+                    <div className="space-y-3">
+                      {(['payroll', 'banking', 'reports', 'assets', 'quickLinks'] as ModuleKey[]).map((moduleKey) => (
+                        <div key={moduleKey} className="flex items-center justify-between">
+                          <p className="font-medium text-sm">{MODULES[moduleKey].name}</p>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={enabledModules.includes(moduleKey)}
+                            onChange={() => toggleModule(moduleKey)}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={handleSaveModules} disabled={modulesSaving}>
+                    {modulesSaving ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : null}
+                    {modulesSaving ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={handleCloseModules}>
+                    Cancel
+                  </Button>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {showForm && (
         <Card>
@@ -229,10 +382,21 @@ export default function CompaniesPage() {
                     <TableCell>{formatDate(company.createdAt)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        {isPlatformAdmin && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleOpenModules(company)}
+                            title="Configure Modules"
+                          >
+                            <Settings className="h-4 w-4" />
+                          </Button>
+                        )}
                         <Button
                           variant="outline"
                           size="sm"
                           onClick={() => handleEdit(company)}
+                          title="Edit Company"
                         >
                           <Edit className="h-4 w-4" />
                         </Button>

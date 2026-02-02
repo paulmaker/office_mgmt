@@ -153,13 +153,18 @@ export async function createInvoice(data: {
     const userEntity = await getUserEntity(userId)
     if (!userEntity) return { success: false, error: 'User entity not found' }
 
-    if (!data.clientId && !data.subcontractorId && !data.supplierId)
+    // Check that at least one party is specified (treating empty strings as falsy)
+    const hasClient = data.clientId && data.clientId.trim() !== ''
+    const hasSubcontractor = data.subcontractorId && data.subcontractorId.trim() !== ''
+    const hasSupplier = data.supplierId && data.supplierId.trim() !== ''
+    
+    if (!hasClient && !hasSubcontractor && !hasSupplier)
       return { success: false, error: 'Invoice must have a client, subcontractor, or supplier' }
 
   let invoiceNumber = ''
   if (data.type === 'SALES') {
-    if (!data.clientId) return { success: false, error: 'Sales invoices require a client' }
-    invoiceNumber = await generateInvoiceNumber(data.clientId)
+    if (!hasClient) return { success: false, error: 'Sales invoices require a client' }
+    invoiceNumber = await generateInvoiceNumber(data.clientId!)
   } else {
     // For purchase invoices, use a simple format
     const prefix = data.supplierId ? 'PO' : 'PI'
@@ -204,15 +209,21 @@ export async function createInvoice(data: {
 
   if (existing) return { success: false, error: 'Invoice number already exists. Please try again.' }
 
+  // Convert empty strings to null for foreign keys
+  const clientId = data.clientId || null
+  const subcontractorId = data.subcontractorId || null
+  const supplierId = data.supplierId || null
+  const jobId = data.jobId || null
+
   const invoice = await prisma.invoice.create({
     data: {
       entityId: userEntity.entityId,
       invoiceNumber,
       type: data.type,
-      clientId: data.clientId,
-      subcontractorId: data.subcontractorId,
-      supplierId: data.supplierId,
-      jobId: data.jobId,
+      clientId,
+      subcontractorId,
+      supplierId,
+      jobId,
       date: data.date,
       dueDate: data.dueDate,
       sentDate: data.sentDate,
@@ -323,14 +334,20 @@ export async function updateInvoice(
   const total = subtotal + vatAmount - cisDeduction
   const outstandingAmount = total - existingInvoice.paidAmount
 
+  // Convert empty strings to null for foreign keys (undefined means don't update)
+  const clientId = data.clientId === '' ? null : data.clientId
+  const subcontractorId = data.subcontractorId === '' ? null : data.subcontractorId
+  const supplierId = data.supplierId === '' ? null : data.supplierId
+  const jobId = data.jobId === '' ? null : data.jobId
+
   // Update invoice
   const invoice = await prisma.invoice.update({
     where: { id },
     data: {
-      clientId: data.clientId,
-      subcontractorId: data.subcontractorId,
-      supplierId: data.supplierId,
-      jobId: data.jobId,
+      clientId,
+      subcontractorId,
+      supplierId,
+      jobId,
       date: data.date,
       dueDate: data.dueDate,
       sentDate: data.sentDate,

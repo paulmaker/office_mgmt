@@ -78,6 +78,26 @@ export default function UsersPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Client-side validation
+    if (!formData.email.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: "Email is required"
+      })
+      return
+    }
+    
+    if (!editing && !formData.entityId) {
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: "Please select a company"
+      })
+      return
+    }
+    
     setSubmitting(true)
     try {
       if (editing) {
@@ -93,12 +113,20 @@ export default function UsersPage() {
             description: "User details have been updated successfully."
         })
       } else {
-        await createUser(formData)
-        toast({
-            variant: "success",
-            title: "Invitation Sent",
-            description: `An invite email has been sent to ${formData.email}.`
-        })
+        const result = await createUser(formData)
+        if (result.emailSent) {
+          toast({
+              variant: "success",
+              title: "Invitation Sent",
+              description: `An invite email has been sent to ${formData.email}.`
+          })
+        } else {
+          toast({
+              variant: "default",
+              title: "User Created",
+              description: `User created but invite email could not be sent. They can use the forgot password feature to set up their account.`
+          })
+        }
       }
       setIsDialogOpen(false)
       setEditing(null)

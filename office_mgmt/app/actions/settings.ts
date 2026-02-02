@@ -4,9 +4,9 @@ import { prisma } from "@/lib/prisma"
 import { auth } from "@/app/api/auth/[...nextauth]/route"
 import { revalidatePath } from "next/cache"
 import { z } from "zod"
-import { getAllModuleKeys, type ModuleKey } from "@/lib/module-access"
+import { getAllModuleKeys } from "@/lib/module-access"
 
-// Schema for entity settings
+// Schema for entity settings (excludes enabledModules - managed separately by Platform Admin)
 const settingsSchema = z.object({
   companyName: z.string().optional(),
   companyRegistration: z.string().optional(),
@@ -32,9 +32,6 @@ const settingsSchema = z.object({
   notifyVehicleReminders: z.boolean().default(true),
   notifyCisReturn: z.boolean().default(true),
   notifyVatReturn: z.boolean().default(true),
-  
-  // Module Access
-  enabledModules: z.array(z.string()).optional(),
 })
 
 export type SettingsFormData = z.infer<typeof settingsSchema>
@@ -74,19 +71,41 @@ export async function getSettings() {
     notifyVehicleReminders: true,
     notifyCisReturn: true,
     notifyVatReturn: true,
-    // Default: all modules enabled (backward compatible)
-    enabledModules: getAllModuleKeys(),
   }
 
   // If settings exist, merge them. Otherwise return defaults.
   const merged = entity.settings ? { ...defaults, ...(entity.settings as object) } : defaults
   
-  // Ensure enabledModules is always an array
-  if (!merged.enabledModules || merged.enabledModules.length === 0) {
-    merged.enabledModules = getAllModuleKeys()
+  return merged
+}
+
+/**
+ * Get enabled modules for the current user's entity
+ * Used by sidebar and other components to filter available modules
+ */
+export async function getEnabledModulesForCurrentEntity() {
+  const session = await auth()
+  if (!session?.user?.entityId) {
+    throw new Error("Unauthorized")
+  }
+
+  const entity = await prisma.entity.findUnique({
+    where: { id: session.user.entityId },
+    select: { settings: true }
+  })
+
+  if (!entity) {
+    throw new Error("Entity not found")
+  }
+
+  const settings = entity.settings as { enabledModules?: string[] } | null
+  
+  // If enabledModules is not set, return all modules (backward compatible)
+  if (!settings?.enabledModules || settings.enabledModules.length === 0) {
+    return getAllModuleKeys()
   }
   
-  return merged
+  return settings.enabledModules
 }
 
 export async function updateSettings(data: SettingsFormData) {
@@ -104,19 +123,24 @@ export async function updateSettings(data: SettingsFormData) {
   // Validate data
   const validated = settingsSchema.parse(data)
 
-  // Validate enabledModules if provided
-  if (validated.enabledModules) {
-    const allModuleKeys = getAllModuleKeys()
-    const invalidModules = validated.enabledModules.filter(m => !allModuleKeys.includes(m as ModuleKey))
-    if (invalidModules.length > 0) {
-      throw new Error(`Invalid module keys: ${invalidModules.join(', ')}`)
-    }
+  // Get existing settings to preserve enabledModules (managed by Platform Admin only)
+  const existingEntity = await prisma.entity.findUnique({
+    where: { id: session.user.entityId },
+    select: { settings: true }
+  })
+
+  const existingSettings = (existingEntity?.settings as { enabledModules?: string[] }) || {}
+
+  // Merge validated settings with existing enabledModules
+  const mergedSettings = {
+    ...validated,
+    enabledModules: existingSettings.enabledModules, // Preserve module settings
   }
 
   await prisma.entity.update({
     where: { id: session.user.entityId },
     data: {
-      settings: validated as any, // Prisma Json type workaround
+      settings: mergedSettings as any, // Prisma Json type workaround
       // Optionally update the entity name if company name changed
       ...(validated.companyName ? { name: validated.companyName } : {})
     }

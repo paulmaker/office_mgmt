@@ -1,14 +1,18 @@
 # Configurable Module Access - Implementation Plan
 
 ## Overview
-Enable organizations to control which modules/features are available to their users. This allows different companies to enable/disable features based on their needs (e.g., some may not need CIS Payroll, others may not need Asset Management).
+Enable Platform Admins to control which modules/features are available per company. This allows different companies to have different features enabled based on their needs (e.g., some may not need CIS Payroll, others may not need Asset Management).
 
 ## Architecture Decision
 
 **Storage Location:** `Entity.settings` (JSON field)
 - **Why Entity-level?** Different companies (entities) within the same organization might have different needs
-- **Alternative:** Could be `TenantAccount.settings` for organization-wide control
-- **Recommendation:** Start with Entity-level, can add TenantAccount-level inheritance later
+- Each company can have its own independent module configuration
+
+**Access Control:** Platform Admin only
+- Only Platform Admins can view and modify module settings
+- Module configuration is available on the Companies admin page (`/admin/companies`)
+- A settings icon button appears next to each company for Platform Admins
 
 ## Module Definitions
 
@@ -139,14 +143,15 @@ export async function requireModule(entityId: string, module: ModuleKey) {
 
 ## UI/UX Considerations
 
-### Settings Page
-- **Location:** Add "Module Access" section to existing Settings page
-- **Layout:** Card with toggle switches, grouped by category:
+### Companies Admin Page
+- **Location:** Module Access configuration on the Companies admin page (`/admin/companies`)
+- **Access:** Settings icon button next to each company (Platform Admin only)
+- **Layout:** Expandable card with toggle switches, grouped by category:
   - **People & Contacts:** Clients, Subcontractors, Employees, Suppliers
   - **Operations:** Jobs, Job Prices, Invoices, Timesheets
   - **Financial:** CIS Payroll, Bank Reconciliation, Reports
   - **Tools:** Assets, Quick Links
-- **Permissions:** Only `ENTITY_ADMIN`, `ACCOUNT_ADMIN`, or `PLATFORM_ADMIN` can change
+- **Permissions:** Only `PLATFORM_ADMIN` can view and change module settings
 
 ### User Experience
 - **Graceful Degradation:** If user bookmarks a disabled module URL, show friendly message

@@ -23,6 +23,19 @@ export async function createUser(data: {
     throw new Error('Unauthorized')
   }
 
+  // Validate required fields
+  if (!data.email || !data.email.trim()) {
+    throw new Error('Email is required')
+  }
+
+  if (!data.entityId || !data.entityId.trim()) {
+    throw new Error('Please select a company')
+  }
+
+  if (!data.role) {
+    throw new Error('Role is required')
+  }
+
   const userId = session.user.id as string
   const isAdmin = await isPlatformAdmin(userId)
 
@@ -34,7 +47,7 @@ export async function createUser(data: {
     })
 
     if (!entity) {
-      throw new Error('Entity not found')
+      throw new Error('Company not found. Please select a valid company.')
     }
 
     // Account Admin can create users in their account
@@ -44,13 +57,23 @@ export async function createUser(data: {
     const isEntAdmin = await isEntityAdmin(userId, data.entityId)
 
     if (!isAccAdmin && !isEntAdmin) {
-      throw new Error('You do not have permission to create users in this Entity')
+      throw new Error('You do not have permission to create users in this Company')
+    }
+  } else {
+    // Platform admin also needs to verify the entity exists
+    const entity = await prisma.entity.findUnique({
+      where: { id: data.entityId },
+      select: { id: true },
+    })
+
+    if (!entity) {
+      throw new Error('Company not found. Please select a valid company.')
     }
   }
 
   // Check if email already exists
   const existing = await prisma.user.findUnique({
-    where: { email: data.email },
+    where: { email: data.email.trim().toLowerCase() },
   })
 
   if (existing) {
@@ -63,8 +86,8 @@ export async function createUser(data: {
 
   const user = await prisma.user.create({
     data: {
-      email: data.email,
-      name: data.name,
+      email: data.email.trim().toLowerCase(),
+      name: data.name?.trim() || null,
       entityId: data.entityId,
       role: data.role,
       isActive: true,
@@ -86,11 +109,12 @@ export async function createUser(data: {
   })
 
   // Send Invite Email
+  let emailSent = false
   try {
     const baseUrl = process.env.NEXTAUTH_URL || process.env.AUTH_URL || 'http://localhost:3000'
     const inviteUrl = `${baseUrl}/auth/reset-password?token=${token}`
 
-    await resend.emails.send({
+    const { error } = await resend.emails.send({
         from: EMAIL_FROM,
         to: user.email,
         subject: `Welcome to ${user.entity.name}`,
@@ -102,13 +126,29 @@ export async function createUser(data: {
           <p>This link will expire in 48 hours.</p>
         `
     })
+
+    if (error) {
+      console.error("Resend API Error:", error)
+    } else {
+      emailSent = true
+    }
   } catch (error) {
     console.error("Failed to send invite email:", error)
     // We don't throw here to avoid rolling back user creation if email fails
-    // But in production you might want to handle this better (e.g. return warning)
   }
 
-  return user
+  // Return a serializable response
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    entityId: user.entityId,
+    entityName: user.entity.name,
+    organizationName: user.entity.tenantAccount.name,
+    isActive: user.isActive,
+    emailSent,
+  }
 }
 
 /**

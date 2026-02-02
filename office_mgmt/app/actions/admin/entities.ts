@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { isPlatformAdmin, isAccountAdmin } from '@/lib/platform-core/rbac'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
+import { getAllModuleKeys, type ModuleKey } from '@/lib/module-access'
 
 /**
  * Create a new Entity
@@ -164,4 +165,99 @@ export async function updateEntity(
     where: { id },
     data,
   })
+}
+
+/**
+ * Get Entity Settings (including module access)
+ * - Platform Admins only
+ */
+export async function getEntitySettings(entityId: string) {
+  const session = await auth()
+  if (!session?.user) {
+    throw new Error('Unauthorized')
+  }
+
+  const userId = session.user.id as string
+  const isAdmin = await isPlatformAdmin(userId)
+
+  if (!isAdmin) {
+    throw new Error('Only Platform Admins can view entity module settings')
+  }
+
+  const entity = await prisma.entity.findUnique({
+    where: { id: entityId },
+    select: {
+      id: true,
+      name: true,
+      settings: true,
+    },
+  })
+
+  if (!entity) {
+    throw new Error('Entity not found')
+  }
+
+  const settings = entity.settings as { enabledModules?: ModuleKey[] } | null
+
+  // Return enabled modules, defaulting to all if not set
+  return {
+    id: entity.id,
+    name: entity.name,
+    enabledModules: settings?.enabledModules || getAllModuleKeys(),
+  }
+}
+
+/**
+ * Update Entity Module Access
+ * - Platform Admins only
+ */
+export async function updateEntityModules(
+  entityId: string,
+  enabledModules: ModuleKey[]
+) {
+  const session = await auth()
+  if (!session?.user) {
+    throw new Error('Unauthorized')
+  }
+
+  const userId = session.user.id as string
+  const isAdmin = await isPlatformAdmin(userId)
+
+  if (!isAdmin) {
+    throw new Error('Only Platform Admins can update entity module settings')
+  }
+
+  const entity = await prisma.entity.findUnique({
+    where: { id: entityId },
+    select: {
+      id: true,
+      settings: true,
+    },
+  })
+
+  if (!entity) {
+    throw new Error('Entity not found')
+  }
+
+  // Validate module keys
+  const allModuleKeys = getAllModuleKeys()
+  const invalidModules = enabledModules.filter(m => !allModuleKeys.includes(m))
+  if (invalidModules.length > 0) {
+    throw new Error(`Invalid module keys: ${invalidModules.join(', ')}`)
+  }
+
+  // Merge with existing settings
+  const existingSettings = (entity.settings as object) || {}
+
+  await prisma.entity.update({
+    where: { id: entityId },
+    data: {
+      settings: {
+        ...existingSettings,
+        enabledModules,
+      },
+    },
+  })
+
+  return { success: true }
 }
