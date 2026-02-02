@@ -127,14 +127,14 @@ export async function createClient(data: {
   // Auto-generate reference code if not provided, or validate if provided
   let referenceCode = data.referenceCode?.toUpperCase().trim()
   if (!referenceCode) {
-    // Auto-generate 2 letters + number (e.g., CC1, BS12)
-    const basePrefix = generateReferenceCode(data.name, data.companyName)
+    // Auto-generate 3 letters (e.g., JOH, SMI, ABC)
+    const baseCode = generateReferenceCode(data.name, data.companyName)
     
-    // Find the next available number for this prefix
-    let number = 1
-    let finalCode = `${basePrefix}${number}`
+    // Check if this code already exists, if so try variations
+    let finalCode = baseCode
+    let attempts = 0
     
-    while (true) {
+    while (attempts < 26) {
       const existing = await prisma.client.findFirst({
         where: {
           entityId: userEntity.entityId,
@@ -146,20 +146,21 @@ export async function createClient(data: {
         break
       }
       
-      // Try next number
-      number++
-      finalCode = `${basePrefix}${number}`
-      
-      // Safety limit
-      if (number > 9999) {
-        return { success: false, error: 'Unable to generate unique reference code. Please specify one manually.' }
-      }
+      // Try changing the last letter (A-Z)
+      attempts++
+      const lastChar = String.fromCharCode(65 + attempts) // A=65, B=66, etc.
+      finalCode = baseCode.substring(0, 2) + lastChar
     }
+    
+    if (attempts >= 26) {
+      return { success: false, error: 'Unable to generate unique reference code. Please specify one manually.' }
+    }
+    
     referenceCode = finalCode
   } else {
-    // Validate format: 2 uppercase letters followed by at least one number
-    if (!/^[A-Z]{2}\d+$/.test(referenceCode)) {
-      return { success: false, error: 'Reference code must be 2 uppercase letters followed by a number (e.g., CC1, BS12, CC2)' }
+    // Validate format: exactly 3 uppercase letters
+    if (!/^[A-Z]{3}$/.test(referenceCode)) {
+      return { success: false, error: 'Reference code must be exactly 3 uppercase letters (e.g., JOH, SMI, ABC)' }
     }
     
     // Check if provided reference code is unique
@@ -269,9 +270,9 @@ export async function updateClient(
     if (data.referenceCode) {
       validatedReferenceCode = data.referenceCode.toUpperCase().trim()
       
-      // Validate format: 2 uppercase letters followed by at least one number
-      if (!/^[A-Z]{2}\d+$/.test(validatedReferenceCode)) {
-        return { success: false, error: 'Reference code must be 2 uppercase letters followed by a number (e.g., CC1, BS12, CC2)' }
+      // Validate format: exactly 3 uppercase letters
+      if (!/^[A-Z]{3}$/.test(validatedReferenceCode)) {
+        return { success: false, error: 'Reference code must be exactly 3 uppercase letters (e.g., JOH, SMI, ABC)' }
       }
       
       // Only check uniqueness if it's different from current
@@ -313,31 +314,25 @@ export async function updateClient(
     // If reference code changed, update the InvoiceCode record prefix
     // Note: We don't reset lastNumber - invoices already generated should keep their numbers
     if (validatedReferenceCode && validatedReferenceCode !== existingClient.referenceCode) {
-      const refCode = validatedReferenceCode.toUpperCase()
-      const match = refCode.match(/^([A-Z]{2})\d+$/)
-      if (match) {
-        const prefix = refCode // Use full reference code as prefix
-        
-        // Update or create InvoiceCode record (only update prefix, keep lastNumber)
-        await prisma.invoiceCode.upsert({
-          where: {
-            entityId_clientId: {
-              entityId: existingClient.entityId,
-              clientId: id,
-            },
-          },
-          update: {
-            prefix: prefix,
-            // Don't reset lastNumber - keep existing invoice numbering
-          },
-          create: {
+      // Update or create InvoiceCode record (only update prefix, keep lastNumber)
+      await prisma.invoiceCode.upsert({
+        where: {
+          entityId_clientId: {
             entityId: existingClient.entityId,
             clientId: id,
-            prefix: prefix,
-            lastNumber: 0,
           },
-        })
-      }
+        },
+        update: {
+          prefix: validatedReferenceCode,
+          // Don't reset lastNumber - keep existing invoice numbering
+        },
+        create: {
+          entityId: existingClient.entityId,
+          clientId: id,
+          prefix: validatedReferenceCode,
+          lastNumber: 0,
+        },
+      })
     }
 
     revalidatePath('/clients')

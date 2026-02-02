@@ -166,39 +166,28 @@ export function ClientForm({ client, onSuccess, onCancel }: ClientFormProps) {
                 id="referenceCode"
                 {...register('referenceCode', {
                   pattern: {
-                    value: /^[A-Z]{2}\d+$/,
-                    message: 'Reference code must be 2 uppercase letters followed by a number (e.g., CC1, BS12, CC2)',
+                    value: /^[A-Z]{3}$/,
+                    message: 'Reference code must be exactly 3 uppercase letters (e.g., JOH, SMI, ABC)',
                   },
                   required: {
                     value: false,
-                    message: 'Reference code is optional but if provided must be 2 letters + number',
+                    message: 'Reference code is optional but if provided must be 3 letters',
                   },
                 })}
-                placeholder="CC1, BS12, CC2"
+                placeholder="JOH, SMI, ABC"
                 className="uppercase"
+                maxLength={3}
                 onInput={(e) => {
-                  // Allow letters and numbers, ensure starts with 2 letters followed by numbers
+                  // Only allow uppercase letters, max 3
                   const input = e.currentTarget
-                  let value = input.value.toUpperCase()
-                  // Remove any non-alphanumeric characters
-                  value = value.replace(/[^A-Z0-9]/g, '')
-                  // Ensure it starts with at least 2 letters
-                  const letterMatch = value.match(/^[A-Z]{2,}/)
-                  if (letterMatch) {
-                    const letters = letterMatch[0].substring(0, 2) // Take first 2 letters
-                    const numbers = value.substring(letterMatch[0].length).replace(/[^0-9]/g, '')
-                    input.value = letters + numbers
-                  } else {
-                    // If less than 2 letters, only allow letters
-                    input.value = value.replace(/[^A-Z]/g, '').substring(0, 2)
-                  }
+                  input.value = input.value.toUpperCase().replace(/[^A-Z]/g, '').substring(0, 3)
                 }}
               />
               {errors.referenceCode && (
                 <p className="text-sm text-red-500">{errors.referenceCode.message}</p>
               )}
               <p className="text-xs text-gray-500">
-                Enter 2 letters followed by a number (e.g., CC1, BS12, CC2). If left empty, will auto-generate.
+                Enter 3 letters (e.g., JOH, SMI, ABC). If left empty, will auto-generate.
               </p>
             </div>
 

@@ -7,7 +7,7 @@ import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
 /**
  * Generate invoice number for a client
  * Format: {REFERENCE_CODE}_{NUMBER}
- * Example: CC1_00001, CC1_00002, BS12_00001
+ * Example: JOH_00001, JOH_00002, SMI_00001
  */
 export async function generateInvoiceNumber(clientId: string): Promise<string> {
   const session = await auth()
@@ -28,13 +28,13 @@ export async function generateInvoiceNumber(clientId: string): Promise<string> {
     throw new Error('Client does not have a reference code. Please set one in client settings.')
   }
 
-  // Use the full reference code as the prefix (e.g., "CC1", "BS12", "CC2")
-  // Invoice numbers will be: CC11, CC12, CC13... or BS121, BS122, BS123...
+  // Use the 3-letter reference code as the prefix (e.g., "JOH", "SMI", "ABC")
+  // Invoice numbers will be: JOH_00001, JOH_00002, SMI_00001...
   const prefix = client.referenceCode.toUpperCase().trim()
   
-  // Validate format: 2 letters followed by at least one number
-  if (!/^[A-Z]{2}\d+$/.test(prefix)) {
-    throw new Error(`Client reference code "${client.referenceCode}" must be 2 letters followed by a number (e.g., CC1, BS12, CC2)`)
+  // Validate format: exactly 3 uppercase letters
+  if (!/^[A-Z]{3}$/.test(prefix)) {
+    throw new Error(`Client reference code "${client.referenceCode}" must be exactly 3 uppercase letters (e.g., JOH, SMI, ABC)`)
   }
 
   // Get or create InvoiceCode record for this client

@@ -100,7 +100,7 @@ export function generateReferenceCode(name: string, companyName?: string | null)
   const source = (companyName || name).trim()
   
   if (!source) {
-    return 'CL'
+    return 'CLX'
   }
   
   // Split into words and filter out common words
@@ -110,58 +110,43 @@ export function generateReferenceCode(name: string, companyName?: string | null)
     return !['the', 'and', 'of', 'for', 'ltd', 'limited', 'llc', 'inc', 'incorporated'].includes(lower)
   })
   
-  // If we have words, take first letter of each (up to 2 words for 2-letter code)
-  if (words.length >= 1) {
-    const code = words
-      .slice(0, 2) // Take up to 2 words for 2-letter code
-      .map(word => {
-        // Get first uppercase letter, or first letter if no uppercase
-        const upperMatch = word.match(/[A-Z]/)
-        if (upperMatch) {
-          return upperMatch[0]
-        }
-        // Fallback to first character, uppercase
-        return word.charAt(0).toUpperCase()
-      })
-      .join('')
-    
-    // If we have 2 characters, return them
-    if (code.length >= 2) {
-      return code.substring(0, 2) // Exactly 2 characters
+  // Build 3-letter code from words
+  let code = ''
+  
+  if (words.length >= 3) {
+    // 3+ words: take first letter of first 3 words
+    code = words.slice(0, 3).map(w => w.charAt(0).toUpperCase()).join('')
+  } else if (words.length === 2) {
+    // 2 words: first letter of first word + first 2 letters of second word
+    // Or: first 2 letters of first word + first letter of second word
+    const w1 = words[0].toUpperCase()
+    const w2 = words[1].toUpperCase()
+    if (w2.length >= 2) {
+      code = w1.charAt(0) + w2.substring(0, 2)
+    } else {
+      code = w1.substring(0, 2) + w2.charAt(0)
     }
-    
-    // If only 1 character, pad with second letter of first word or second word
-    if (code.length === 1 && words.length > 0) {
-      const firstWord = words[0]
-      if (firstWord.length > 1) {
-        return code + firstWord.charAt(1).toUpperCase()
-      }
-      if (words.length > 1) {
-        return code + words[1].charAt(0).toUpperCase()
-      }
-      // If still only 1 character, duplicate it
-      return code + code
-    }
+  } else if (words.length === 1) {
+    // 1 word: take first 3 letters
+    code = words[0].toUpperCase().substring(0, 3)
   }
   
-  // Fallback: take first 2 uppercase letters from the source
-  const upperLetters = source.match(/[A-Z]/g)
-  if (upperLetters && upperLetters.length >= 2) {
-    return upperLetters.slice(0, 2).join('')
+  // Ensure we have exactly 3 letters
+  code = code.replace(/[^A-Z]/g, '') // Remove non-letters
+  
+  if (code.length >= 3) {
+    return code.substring(0, 3)
   }
   
-  // Final fallback: first 2 characters, uppercase
-  const cleaned = source.replace(/[^A-Za-z0-9]/g, '').toUpperCase()
-  if (cleaned.length >= 2) {
-    return cleaned.substring(0, 2)
+  // Pad with letters if needed
+  if (code.length === 2) {
+    return code + 'X'
+  }
+  if (code.length === 1) {
+    return code + 'XX'
   }
   
-  // If we still don't have 2 characters, pad with 'X' or duplicate
-  if (cleaned.length === 1) {
-    return cleaned + 'X'
-  }
-  
-  return 'CL' // Ultimate fallback
+  return 'CLX' // Ultimate fallback
 }
 
 /** Result type for server actions – avoids production error sanitization */
