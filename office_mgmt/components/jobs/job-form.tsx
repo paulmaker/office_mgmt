@@ -217,20 +217,6 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="jobNumber">
-            Job Number <span className="text-red-500">*</span>
-          </Label>
-          <Input
-            id="jobNumber"
-            {...register('jobNumber', { required: 'Job number is required' })}
-            placeholder="Client's job reference number"
-          />
-          {errors.jobNumber && (
-            <p className="text-sm text-red-500">{errors.jobNumber.message}</p>
-          )}
-        </div>
-
-        <div className="space-y-2">
           <Label htmlFor="clientId">
             Client <span className="text-red-500">*</span>
           </Label>
@@ -248,6 +234,20 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
           </select>
           {errors.clientId && (
             <p className="text-sm text-red-500">{errors.clientId.message}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="jobNumber">
+            Job Number <span className="text-red-500">*</span>
+          </Label>
+          <Input
+            id="jobNumber"
+            {...register('jobNumber', { required: 'Job number is required' })}
+            placeholder="Client's job reference number"
+          />
+          {errors.jobNumber && (
+            <p className="text-sm text-red-500">{errors.jobNumber.message}</p>
           )}
         </div>
       </div>
