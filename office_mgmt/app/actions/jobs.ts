@@ -248,12 +248,15 @@ export async function updateJob(
     total = data.lineItems.reduce((sum, item) => sum + item.amount, 0)
   }
 
+  // Convert empty string to undefined for clientId (don't update if empty)
+  const clientId = data.clientId === '' ? undefined : data.clientId
+
   // Update job
   const job = await prisma.job.update({
     where: { id },
     data: {
       jobNumber: data.jobNumber,
-      clientId: data.clientId,
+      clientId,
       jobDescription: data.jobDescription,
       dateWorkCommenced: data.dateWorkCommenced,
       price: total,

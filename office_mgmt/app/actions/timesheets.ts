@@ -239,7 +239,10 @@ export async function updateTimesheet(
     if (!entityIds.includes(existingTimesheet.entityId))
       return { success: false, error: 'You do not have permission to update this timesheet' }
 
-    const subcontractorId = data.subcontractorId || existingTimesheet.subcontractorId
+    // Handle empty string for subcontractorId - use existing if empty/undefined
+    const subcontractorId = (data.subcontractorId && data.subcontractorId.trim() !== '') 
+      ? data.subcontractorId 
+      : existingTimesheet.subcontractorId
     const subcontractor = await prisma.subcontractor.findUnique({ where: { id: subcontractorId } })
     if (!subcontractor) return { success: false, error: 'Subcontractor not found' }
 
@@ -254,11 +257,16 @@ export async function updateTimesheet(
   const expenses = data.expenses ?? existingTimesheet.expenses
   const netAmount = grossAmount - cisDeduction + expenses
 
+  // Convert empty string to undefined for subcontractorId
+  const updateSubcontractorId = (data.subcontractorId && data.subcontractorId.trim() !== '') 
+    ? data.subcontractorId 
+    : undefined
+
   // Update timesheet
   const timesheet = await prisma.timesheet.update({
     where: { id },
     data: {
-      subcontractorId: data.subcontractorId,
+      subcontractorId: updateSubcontractorId,
       periodStart: data.periodStart,
       periodEnd: data.periodEnd,
       hoursWorked,

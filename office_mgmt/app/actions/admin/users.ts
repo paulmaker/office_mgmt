@@ -294,9 +294,15 @@ export async function updateUser(
     }
   }
 
+  // Convert empty strings to undefined for foreign keys
+  const entityId = data.entityId === '' ? undefined : data.entityId
+
   return prisma.user.update({
     where: { id },
-    data,
+    data: {
+      ...data,
+      entityId,
+    },
     include: {
       entity: {
         include: {

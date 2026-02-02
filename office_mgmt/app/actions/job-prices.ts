@@ -168,10 +168,13 @@ export async function updateJobPrice(
     if (!entityIds.includes(existingJobPrice.entityId))
       return { success: false, error: 'You do not have permission to update this job price' }
 
+    // Convert empty string to undefined for clientId (don't update if empty)
+    const clientId = data.clientId === '' ? undefined : data.clientId
+
     const jobPrice = await prisma.jobPrice.update({
       where: { id },
       data: {
-        clientId: data.clientId,
+        clientId,
         jobType: data.jobType,
         description: data.description,
         price: data.price,

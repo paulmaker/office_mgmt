@@ -310,15 +310,19 @@ export async function reconcileTransaction(
     if (!entityIds.includes(existingTransaction.entityId))
       return { success: false, error: 'You do not have permission to reconcile this transaction' }
 
-    if (data.invoiceId) {
-      const invoice = await prisma.invoice.findUnique({ where: { id: data.invoiceId } })
+    // Convert empty strings to null for foreign keys
+    const invoiceId = data.invoiceId === '' ? null : data.invoiceId
+    const linkedTimesheetId = data.linkedTimesheetId === '' ? null : data.linkedTimesheetId
+
+    if (invoiceId) {
+      const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } })
       if (!invoice) return { success: false, error: 'Invoice not found' }
       if (invoice.entityId !== existingTransaction.entityId)
         return { success: false, error: 'Invoice does not belong to the same entity' }
     }
 
-    if (data.linkedTimesheetId) {
-      const timesheet = await prisma.timesheet.findUnique({ where: { id: data.linkedTimesheetId } })
+    if (linkedTimesheetId) {
+      const timesheet = await prisma.timesheet.findUnique({ where: { id: linkedTimesheetId } })
       if (!timesheet) return { success: false, error: 'Timesheet not found' }
       if (timesheet.entityId !== existingTransaction.entityId)
         return { success: false, error: 'Timesheet does not belong to the same entity' }
@@ -327,8 +331,8 @@ export async function reconcileTransaction(
     const transaction = await prisma.bankTransaction.update({
       where: { id },
       data: {
-        invoiceId: data.invoiceId,
-        linkedTimesheetId: data.linkedTimesheetId,
+        invoiceId,
+        linkedTimesheetId,
         documentUrl: data.documentUrl,
         notes: data.notes,
         reconciled: true,
