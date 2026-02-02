@@ -193,6 +193,7 @@ export function ReconcileDialog({ open, onOpenChange, transaction, onSuccess }: 
               value={documentUrl}
               onChange={setDocumentUrl}
               onRemove={() => setDocumentUrl('')}
+              description="Upload a PDF remittance document (max 50MB)."
             />
           </div>
 

@@ -431,15 +431,13 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
       {/* PDF Document Upload for Purchase Invoices */}
       {invoiceType === 'PURCHASE' && (
         <div className="space-y-2 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <Label>Invoice PDF Copy</Label>
+          <Label>Attach Invoice PDF</Label>
           <PDFUpload
             value={watch('documentUrl')}
             onChange={(url) => setValue('documentUrl', url)}
             onRemove={() => setValue('documentUrl', undefined)}
+            description="Attach a copy of the original invoice PDF for your records (max 50MB)."
           />
-          <p className="text-xs text-gray-500">
-            Upload a PDF copy of the original invoice for your records.
-          </p>
         </div>
       )}
 

@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Upload, File, X, Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
@@ -12,9 +11,15 @@ interface PDFUploadProps {
   value?: string
   onChange: (url: string) => void
   onRemove?: () => void
+  description?: string
 }
 
-export function PDFUpload({ value, onChange, onRemove }: PDFUploadProps) {
+export function PDFUpload({ 
+  value, 
+  onChange, 
+  onRemove,
+  description = 'Upload a PDF document (max 50MB).'
+}: PDFUploadProps) {
   const [isUploading, setIsUploading] = useState(false)
   const { toast } = useToast()
 
@@ -125,12 +130,13 @@ export function PDFUpload({ value, onChange, onRemove }: PDFUploadProps) {
     )
   }
 
+  const inputId = `pdf-upload-${Math.random().toString(36).substr(2, 9)}`
+
   return (
     <div className="space-y-2">
-      <Label htmlFor="pdf-upload">Upload Remittance PDF</Label>
       <div className="flex items-center gap-2">
         <Input
-          id="pdf-upload"
+          id={inputId}
           type="file"
           accept=".pdf"
           onChange={handleFileUpload}
@@ -139,7 +145,7 @@ export function PDFUpload({ value, onChange, onRemove }: PDFUploadProps) {
         />
         <Button
           variant="outline"
-          onClick={() => document.getElementById('pdf-upload')?.click()}
+          onClick={() => document.getElementById(inputId)?.click()}
           disabled={isUploading}
         >
           {isUploading ? (
@@ -151,7 +157,7 @@ export function PDFUpload({ value, onChange, onRemove }: PDFUploadProps) {
         </Button>
       </div>
       <p className="text-xs text-gray-500">
-        Upload PDF remittance document (max 50MB).
+        {description}
       </p>
     </div>
   )
