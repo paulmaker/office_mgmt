@@ -115,13 +115,18 @@ export async function createJobPrice(data: {
     const userEntity = await getUserEntity(userId)
     if (!userEntity) return { success: false, error: 'User entity not found' }
 
+    // Get all accessible entity IDs for this user
+    const accessibleEntityIds = await getAccessibleEntityIds(userId)
+
     const client = await prisma.client.findUnique({ where: { id: data.clientId } })
     if (!client) return { success: false, error: 'Client not found' }
-    if (client.entityId !== userEntity.entityId) return { success: false, error: 'Client does not belong to your entity' }
+    if (!accessibleEntityIds.includes(client.entityId)) 
+      return { success: false, error: 'Client does not belong to an accessible entity' }
 
+    // Use client's entityId for the job price
     const jobPrice = await prisma.jobPrice.create({
       data: {
-        entityId: userEntity.entityId,
+        entityId: client.entityId,
         clientId: data.clientId,
         jobType: data.jobType,
         description: data.description,

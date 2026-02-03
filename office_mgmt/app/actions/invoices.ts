@@ -154,6 +154,9 @@ export async function createInvoice(data: {
     const userEntity = await getUserEntity(userId)
     if (!userEntity) return { success: false, error: 'User entity not found' }
 
+    // Get all accessible entity IDs for this user
+    const accessibleEntityIds = await getAccessibleEntityIds(userId)
+
     // Check that at least one party is specified (treating empty strings as falsy)
     const hasClient = data.clientId && data.clientId.trim() !== ''
     const hasSubcontractor = data.subcontractorId && data.subcontractorId.trim() !== ''
@@ -161,6 +164,29 @@ export async function createInvoice(data: {
     
     if (!hasClient && !hasSubcontractor && !hasSupplier)
       return { success: false, error: 'Invoice must have a client, subcontractor, or supplier' }
+
+  // Determine the entityId from the primary party and validate access
+  let invoiceEntityId: string
+  
+  if (hasClient) {
+    const client = await prisma.client.findUnique({ where: { id: data.clientId! } })
+    if (!client) return { success: false, error: 'Client not found' }
+    if (!accessibleEntityIds.includes(client.entityId)) 
+      return { success: false, error: 'Client does not belong to an accessible entity' }
+    invoiceEntityId = client.entityId
+  } else if (hasSubcontractor) {
+    const subcontractor = await prisma.subcontractor.findUnique({ where: { id: data.subcontractorId! } })
+    if (!subcontractor) return { success: false, error: 'Subcontractor not found' }
+    if (!accessibleEntityIds.includes(subcontractor.entityId))
+      return { success: false, error: 'Subcontractor does not belong to an accessible entity' }
+    invoiceEntityId = subcontractor.entityId
+  } else {
+    const supplier = await prisma.supplier.findUnique({ where: { id: data.supplierId! } })
+    if (!supplier) return { success: false, error: 'Supplier not found' }
+    if (!accessibleEntityIds.includes(supplier.entityId))
+      return { success: false, error: 'Supplier does not belong to an accessible entity' }
+    invoiceEntityId = supplier.entityId
+  }
 
   let invoiceNumber = ''
   if (data.type === 'SALES') {
@@ -203,7 +229,7 @@ export async function createInvoice(data: {
   // Check if invoice number already exists in entity
   const existing = await prisma.invoice.findFirst({
     where: {
-      entityId: userEntity.entityId,
+      entityId: invoiceEntityId,
       invoiceNumber,
     },
   })
@@ -218,7 +244,7 @@ export async function createInvoice(data: {
 
   const invoice = await prisma.invoice.create({
     data: {
-      entityId: userEntity.entityId,
+      entityId: invoiceEntityId,
       invoiceNumber,
       type: data.type,
       clientId,

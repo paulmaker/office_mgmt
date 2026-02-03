@@ -121,10 +121,16 @@ export async function createTimesheet(data: {
     const userEntity = await getUserEntity(userId)
     if (!userEntity) return { success: false, error: 'User entity not found' }
 
+    // Get all accessible entity IDs for this user
+    const accessibleEntityIds = await getAccessibleEntityIds(userId)
+
     const subcontractor = await prisma.subcontractor.findUnique({ where: { id: data.subcontractorId } })
     if (!subcontractor) return { success: false, error: 'Subcontractor not found' }
-    if (subcontractor.entityId !== userEntity.entityId)
-      return { success: false, error: 'Subcontractor does not belong to your entity' }
+    if (!accessibleEntityIds.includes(subcontractor.entityId))
+      return { success: false, error: 'Subcontractor does not belong to an accessible entity' }
+
+    // Use subcontractor's entityId for the timesheet
+    const timesheetEntityId = subcontractor.entityId
 
     const regularAmount = data.hoursWorked * data.rate
     const additionalHours = data.additionalHours || 0
@@ -138,7 +144,7 @@ export async function createTimesheet(data: {
     try {
       const timesheet = await prisma.timesheet.create({
         data: {
-          entityId: userEntity.entityId,
+          entityId: timesheetEntityId,
           subcontractorId: data.subcontractorId,
           periodStart: data.periodStart,
           periodEnd: data.periodEnd,
@@ -173,7 +179,7 @@ export async function createTimesheet(data: {
       ) {
         const timesheet = await prisma.timesheet.create({
           data: {
-            entityId: userEntity.entityId,
+            entityId: timesheetEntityId,
             subcontractorId: data.subcontractorId,
             periodStart: data.periodStart,
             periodEnd: data.periodEnd,
