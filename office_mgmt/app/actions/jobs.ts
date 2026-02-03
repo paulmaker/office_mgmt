@@ -115,10 +115,39 @@ export async function getJob(id: string) {
 }
 
 /**
+ * Generate the next job number for an entity
+ */
+async function generateJobNumber(entityId: string): Promise<string> {
+  // Find the highest existing job number for this entity
+  const lastJob = await prisma.job.findFirst({
+    where: { 
+      entityId,
+      jobNumber: { startsWith: 'JOB-' }
+    },
+    orderBy: { jobNumber: 'desc' },
+  })
+
+  if (!lastJob) {
+    return 'JOB-0001'
+  }
+
+  // Extract the number part and increment
+  const match = lastJob.jobNumber.match(/JOB-(\d+)/)
+  if (match) {
+    const nextNum = parseInt(match[1], 10) + 1
+    return `JOB-${nextNum.toString().padStart(4, '0')}`
+  }
+
+  // Fallback: count all jobs and add 1
+  const count = await prisma.job.count({ where: { entityId } })
+  return `JOB-${(count + 1).toString().padStart(4, '0')}`
+}
+
+/**
  * Create a new job
  */
 export async function createJob(data: {
-  jobNumber: string
+  jobNumber?: string
   clientId: string
   jobDescription: string
   dateWorkCommenced: Date
@@ -162,15 +191,18 @@ export async function createJob(data: {
 
     const total = data.lineItems.reduce((sum, item) => sum + item.amount, 0)
 
+    // Auto-generate job number if not provided
+    const jobNumber = data.jobNumber?.trim() || await generateJobNumber(userEntity.entityId)
+
     const existingJob = await prisma.job.findFirst({
-      where: { entityId: userEntity.entityId, jobNumber: data.jobNumber },
+      where: { entityId: userEntity.entityId, jobNumber },
     })
     if (existingJob) return { success: false, error: 'A job with this job number already exists' }
 
     const job = await prisma.job.create({
     data: {
       entityId: userEntity.entityId,
-      jobNumber: data.jobNumber,
+      jobNumber,
       clientId: data.clientId,
       jobDescription: data.jobDescription,
       dateWorkCommenced: data.dateWorkCommenced,

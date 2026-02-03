@@ -34,7 +34,7 @@ type JobWithRelations = Job & {
 }
 
 interface JobFormData {
-  jobNumber: string
+  jobNumber?: string
   clientId: string
   jobDescription: string
   dateWorkCommenced: string
@@ -262,19 +262,16 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
 
         <div className="space-y-2">
           <Label htmlFor="jobNumber">
-            Client Reference Number <span className="text-red-500">*</span>
+            Job Number
           </Label>
           <Input
             id="jobNumber"
-            {...register('jobNumber', { required: 'Client reference number is required' })}
-            placeholder="e.g., PO-12345, WO-001"
+            {...register('jobNumber')}
+            placeholder="Leave blank to auto-generate"
           />
           <p className="text-xs text-gray-500">
-            Enter the client&apos;s purchase order or work order number
+            Optional - will be auto-generated if not provided
           </p>
-          {errors.jobNumber && (
-            <p className="text-sm text-red-500">{errors.jobNumber.message}</p>
-          )}
         </div>
       </div>
 
