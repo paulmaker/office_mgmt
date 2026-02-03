@@ -353,7 +353,7 @@ export default function InvoicesPage() {
                   return (
                     <TableRow key={invoice.id}>
                       <TableCell className="font-medium">
-                        {invoice.invoiceNumber}
+                        #{invoice.invoiceNumber}
                       </TableCell>
                       <TableCell>
                         <Badge variant={invoice.type === 'SALES' ? 'default' : 'secondary'}>
