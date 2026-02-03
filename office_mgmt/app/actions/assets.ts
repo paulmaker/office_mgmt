@@ -47,6 +47,46 @@ export async function getAssets() {
 }
 
 /**
+ * Get all vehicles for the current user's accessible entities
+ */
+export async function getVehicles() {
+  const session = await auth()
+  if (!session?.user) {
+    throw new Error('Unauthorized')
+  }
+
+  const userId = session.user.id as string
+
+  // Check permission
+  const canRead = await hasPermission(userId, 'assets', 'read')
+  if (!canRead) {
+    throw new Error('You do not have permission to view assets')
+  }
+
+  // Get accessible entity IDs
+  const entityIds = await getAccessibleEntityIds(userId)
+
+  if (entityIds.length === 0) {
+    return []
+  }
+
+  // Fetch only vehicle assets scoped to accessible entities
+  const vehicles = await prisma.companyAsset.findMany({
+    where: {
+      entityId: {
+        in: entityIds,
+      },
+      type: 'VEHICLE',
+    },
+    orderBy: {
+      name: 'asc',
+    },
+  })
+
+  return vehicles
+}
+
+/**
  * Get a single asset by ID
  */
 export async function getAsset(id: string) {

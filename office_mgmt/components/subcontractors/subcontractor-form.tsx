@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createSubcontractor, updateSubcontractor } from '@/app/actions/subcontractors'
-import type { Subcontractor, CISStatus, PaymentType } from '@prisma/client'
+import { getVehicles } from '@/app/actions/assets'
+import type { Subcontractor, CISStatus, PaymentType, CompanyAsset } from '@prisma/client'
 
 interface SubcontractorFormData {
   name: string
@@ -18,6 +19,7 @@ interface SubcontractorFormData {
   cisVerificationNumber?: string
   cisStatus: CISStatus
   paymentType: PaymentType
+  car?: string
   notes?: string
 }
 
@@ -30,6 +32,23 @@ interface SubcontractorFormProps {
 export function SubcontractorForm({ subcontractor, onSuccess, onCancel }: SubcontractorFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [vehicles, setVehicles] = useState<CompanyAsset[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const loadVehicles = async () => {
+      try {
+        setIsLoading(true)
+        const vehicleList = await getVehicles()
+        setVehicles(vehicleList)
+      } catch (err) {
+        console.error('Failed to load vehicles:', err)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    loadVehicles()
+  }, [])
 
   const {
     register,
@@ -47,6 +66,7 @@ export function SubcontractorForm({ subcontractor, onSuccess, onCancel }: Subcon
           cisVerificationNumber: subcontractor.cisVerificationNumber || '',
           cisStatus: subcontractor.cisStatus,
           paymentType: subcontractor.paymentType,
+          car: (subcontractor as any).car || '',
           notes: subcontractor.notes || '',
         }
       : {
@@ -171,6 +191,37 @@ export function SubcontractorForm({ subcontractor, onSuccess, onCancel }: Subcon
             <option value="NON_CIS">Non-CIS</option>
           </select>
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="car">Vehicle Allocation</Label>
+        {isLoading ? (
+          <div className="h-10 bg-gray-100 rounded-md animate-pulse" />
+        ) : vehicles.length > 0 ? (
+          <select
+            id="car"
+            {...register('car')}
+            className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+          >
+            <option value="">No vehicle allocated</option>
+            {vehicles.map((vehicle) => (
+              <option key={vehicle.id} value={`${vehicle.name}${vehicle.registrationNumber ? ` (${vehicle.registrationNumber})` : ''}`}>
+                {vehicle.name}{vehicle.registrationNumber ? ` (${vehicle.registrationNumber})` : ''}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <Input
+            id="car"
+            {...register('car')}
+            placeholder="e.g., Ford Transit, VW Golf"
+          />
+        )}
+        {vehicles.length === 0 && !isLoading && (
+          <p className="text-xs text-gray-500">
+            No vehicles found. Add vehicles in Assets to enable dropdown selection.
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">

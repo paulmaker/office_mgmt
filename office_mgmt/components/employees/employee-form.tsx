@@ -1,12 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createEmployee, updateEmployee } from '@/app/actions/employees'
-import type { Employee } from '@prisma/client'
+import { getVehicles } from '@/app/actions/assets'
+import type { Employee, CompanyAsset } from '@prisma/client'
 
 interface EmployeeFormData {
   name: string
@@ -26,6 +27,23 @@ interface EmployeeFormProps {
 export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [vehicles, setVehicles] = useState<CompanyAsset[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    const loadVehicles = async () => {
+      try {
+        setIsLoading(true)
+        const vehicleList = await getVehicles()
+        setVehicles(vehicleList)
+      } catch (err) {
+        console.error('Failed to load vehicles:', err)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    loadVehicles()
+  }, [])
 
   const {
     register,
@@ -119,14 +137,36 @@ export function EmployeeForm({ employee, onSuccess, onCancel }: EmployeeFormProp
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="car">Car</Label>
-        <Input
-          id="car"
-          {...register('car')}
-          placeholder="e.g., Ford Transit, VW Golf"
-        />
+        <Label htmlFor="car">Vehicle Allocation</Label>
+        {isLoading ? (
+          <div className="h-10 bg-gray-100 rounded-md animate-pulse" />
+        ) : vehicles.length > 0 ? (
+          <select
+            id="car"
+            {...register('car')}
+            className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+          >
+            <option value="">No vehicle allocated</option>
+            {vehicles.map((vehicle) => (
+              <option key={vehicle.id} value={`${vehicle.name}${vehicle.registrationNumber ? ` (${vehicle.registrationNumber})` : ''}`}>
+                {vehicle.name}{vehicle.registrationNumber ? ` (${vehicle.registrationNumber})` : ''}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <Input
+            id="car"
+            {...register('car')}
+            placeholder="e.g., Ford Transit, VW Golf"
+          />
+        )}
         {errors.car && (
           <p className="text-sm text-red-500">{errors.car.message}</p>
+        )}
+        {vehicles.length === 0 && !isLoading && (
+          <p className="text-xs text-gray-500">
+            No vehicles found. Add vehicles in Assets to enable dropdown selection.
+          </p>
         )}
       </div>
 

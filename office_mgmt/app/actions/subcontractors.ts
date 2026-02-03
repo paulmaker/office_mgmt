@@ -100,6 +100,7 @@ export async function createSubcontractor(data: {
   cisStatus?: CISStatus
   paymentType?: PaymentType
   bankDetails?: any
+  car?: string
   notes?: string
 }) {
   try {
@@ -131,6 +132,7 @@ export async function createSubcontractor(data: {
         cisStatus: data.cisStatus ?? 'NOT_VERIFIED',
         paymentType: data.paymentType ?? 'CIS',
         bankDetails: data.bankDetails,
+        car: data.car,
         notes: data.notes,
       },
     })
@@ -158,6 +160,7 @@ export async function updateSubcontractor(
     cisStatus?: CISStatus
     paymentType?: PaymentType
     bankDetails?: any
+    car?: string
     notes?: string
   }
 ) {
@@ -196,6 +199,7 @@ export async function updateSubcontractor(
         cisStatus: data.cisStatus,
         paymentType: data.paymentType,
         bankDetails: data.bankDetails,
+        car: data.car,
         notes: data.notes,
       },
     })
