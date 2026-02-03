@@ -75,6 +75,7 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
     handleSubmit,
     control,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<JobFormData>({
     defaultValues: job
@@ -150,11 +151,23 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
   }, [selectedClientId])
 
   const addJobPriceToLineItems = (jobPrice: JobPrice) => {
-    append({
-      description: jobPrice.jobType,
-      amount: jobPrice.price,
-      notes: jobPrice.description || '',
-    })
+    // Check if the first row is empty and fill it instead of appending
+    if (
+      fields.length === 1 &&
+      !watchedLineItems[0]?.description?.trim() &&
+      (!watchedLineItems[0]?.amount || watchedLineItems[0]?.amount === 0)
+    ) {
+      // Replace the empty first row
+      setValue('lineItems.0.description', jobPrice.jobType)
+      setValue('lineItems.0.amount', jobPrice.price)
+      setValue('lineItems.0.notes', jobPrice.description || '')
+    } else {
+      append({
+        description: jobPrice.jobType,
+        amount: jobPrice.price,
+        notes: jobPrice.description || '',
+      })
+    }
   }
 
   const onSubmit = async (data: JobFormData) => {

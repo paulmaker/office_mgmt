@@ -202,10 +202,21 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
   }, [selectedClientId, invoiceType])
 
   const addJobPriceToLineItems = (jobPrice: any) => {
-    append({
-      description: jobPrice.jobType,
-      amount: jobPrice.price,
-    })
+    // Check if the first row is empty and fill it instead of appending
+    if (
+      fields.length === 1 &&
+      !watchedLineItems[0]?.description?.trim() &&
+      (!watchedLineItems[0]?.amount || watchedLineItems[0]?.amount === 0)
+    ) {
+      // Replace the empty first row
+      setValue('lineItems.0.description', jobPrice.jobType)
+      setValue('lineItems.0.amount', jobPrice.price)
+    } else {
+      append({
+        description: jobPrice.jobType,
+        amount: jobPrice.price,
+      })
+    }
   }
 
   const onSubmit = async (data: InvoiceFormData) => {
