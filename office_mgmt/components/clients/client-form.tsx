@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,10 +32,13 @@ interface ClientFormProps {
 export function ClientForm({ client, onSuccess, onCancel }: ClientFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [sameAsBuildingAddress, setSameAsBuildingAddress] = useState(false)
 
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors },
   } = useForm<ClientFormData>({
     defaultValues: client
@@ -59,6 +62,22 @@ export function ClientForm({ client, onSuccess, onCancel }: ClientFormProps) {
           paymentTerms: 30,
         },
   })
+
+  const watchedAddress = watch('address')
+
+  // Sync billing address when "Same as Building Address" is checked
+  useEffect(() => {
+    if (sameAsBuildingAddress && watchedAddress) {
+      setValue('billingAddress', watchedAddress)
+    }
+  }, [sameAsBuildingAddress, watchedAddress, setValue])
+
+  const handleSameAddressChange = (checked: boolean) => {
+    setSameAsBuildingAddress(checked)
+    if (checked && watchedAddress) {
+      setValue('billingAddress', watchedAddress)
+    }
+  }
 
   const onSubmit = async (data: ClientFormData) => {
     setIsSubmitting(true)
@@ -155,8 +174,27 @@ export function ClientForm({ client, onSuccess, onCancel }: ClientFormProps) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="billingAddress">Billing Address</Label>
-            <Input id="billingAddress" {...register('billingAddress')} />
+            <div className="flex items-center justify-between">
+              <Label htmlFor="billingAddress">Billing Address</Label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="sameAsBuildingAddress"
+                  checked={sameAsBuildingAddress}
+                  onChange={(e) => handleSameAddressChange(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300"
+                />
+                <Label htmlFor="sameAsBuildingAddress" className="text-sm font-normal text-gray-600">
+                  Same as Building Address
+                </Label>
+              </div>
+            </div>
+            <Input
+              id="billingAddress"
+              {...register('billingAddress')}
+              disabled={sameAsBuildingAddress}
+              className={sameAsBuildingAddress ? 'bg-gray-100' : ''}
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
