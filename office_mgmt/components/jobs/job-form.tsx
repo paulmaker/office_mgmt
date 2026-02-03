@@ -5,14 +5,14 @@ import { useForm, useFieldArray } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { createJob, updateJob, getJob } from '@/app/actions/jobs'
+import { createJob, updateJob } from '@/app/actions/jobs'
 import { getClients } from '@/app/actions/clients'
 import { getEmployees } from '@/app/actions/employees'
 import { getSubcontractors } from '@/app/actions/subcontractors'
 import { getJobPrices } from '@/app/actions/job-prices'
 import { formatCurrency } from '@/lib/utils'
 import { Plus, Trash2 } from 'lucide-react'
-import type { Job, Client, Employee, Subcontractor, JobStatus, JobEmployee, JobLineItem as PrismaJobLineItem } from '@prisma/client'
+import type { Job, Client, Employee, Subcontractor, JobStatus, JobLineItem as PrismaJobLineItem } from '@prisma/client'
 
 interface JobLineItem {
   id?: string
@@ -75,7 +75,6 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
     handleSubmit,
     control,
     watch,
-    setValue,
     formState: { errors },
   } = useForm<JobFormData>({
     defaultValues: job
@@ -151,7 +150,6 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
   }, [selectedClientId])
 
   const addJobPriceToLineItems = (jobPrice: JobPrice) => {
-    const currentLineItems = watch('lineItems') || []
     append({
       description: jobPrice.jobType,
       amount: jobPrice.price,
@@ -251,13 +249,16 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
 
         <div className="space-y-2">
           <Label htmlFor="jobNumber">
-            Job Number <span className="text-red-500">*</span>
+            Client Reference Number <span className="text-red-500">*</span>
           </Label>
           <Input
             id="jobNumber"
-            {...register('jobNumber', { required: 'Job number is required' })}
-            placeholder="Client's job reference number"
+            {...register('jobNumber', { required: 'Client reference number is required' })}
+            placeholder="e.g., PO-12345, WO-001"
           />
+          <p className="text-xs text-gray-500">
+            Enter the client&apos;s purchase order or work order number
+          </p>
           {errors.jobNumber && (
             <p className="text-sm text-red-500">{errors.jobNumber.message}</p>
           )}
