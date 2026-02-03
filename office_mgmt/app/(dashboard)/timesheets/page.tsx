@@ -168,6 +168,59 @@ export default function TimesheetsPage() {
     loadTimesheets()
   }
 
+  const handleDownload = (id: string) => {
+    // Find the timesheet to get details for the CSV
+    const timesheet = timesheets.find(t => t.id === id)
+    if (!timesheet) return
+
+    // Create CSV content
+    const csvContent = [
+      ['Timesheet Details'],
+      [''],
+      ['Subcontractor', timesheet.subcontractor?.name || ''],
+      ['CIS Status', timesheet.subcontractor?.cisStatus?.replace('_', ' ') || ''],
+      [''],
+      ['Period Start', formatDate(timesheet.periodStart)],
+      ['Period End', formatDate(timesheet.periodEnd)],
+      ['Submitted Date', timesheet.submittedDate ? formatDate(timesheet.submittedDate) : ''],
+      ['Submitted Via', timesheet.submittedVia || ''],
+      [''],
+      ['Hours Worked', timesheet.hoursWorked.toString()],
+      ['Rate (£/hr)', timesheet.rate.toString()],
+      ['Gross Amount', timesheet.grossAmount.toString()],
+      ['Expenses', (timesheet.expenses || 0).toString()],
+      ['CIS Deduction', timesheet.cisDeduction.toString()],
+      ['Net Amount', timesheet.netAmount.toString()],
+      [''],
+      ['Receipts Received', timesheet.receiptsReceived ? 'Yes' : 'No'],
+      ['Status', timesheet.status],
+      ['Notes', timesheet.notes || ''],
+    ]
+      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .join('\n')
+
+    // Create and download the file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute(
+      'download',
+      `timesheet-${timesheet.subcontractor?.name?.replace(/\s+/g, '-') || 'unknown'}-${formatDate(timesheet.periodStart)}.csv`
+    )
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    toast({
+      variant: 'success',
+      title: 'Downloaded',
+      description: 'Timesheet has been downloaded as CSV.',
+    })
+  }
+
   const filteredTimesheets = timesheets.filter(timesheet => {
     const subName = timesheet.subcontractor?.name.toLowerCase() || ''
     return (
@@ -388,7 +441,12 @@ export default function TimesheetsPage() {
                               <Trash2 className="h-4 w-4 text-red-500" />
                             </Button>
                           )}
-                          <Button variant="ghost" size="sm">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDownload(timesheet.id)}
+                            title="Download timesheet"
+                          >
                             <Download className="h-4 w-4" />
                           </Button>
                         </div>
