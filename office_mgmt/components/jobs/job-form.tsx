@@ -8,10 +8,11 @@ import { Label } from '@/components/ui/label'
 import { createJob, updateJob, getJob } from '@/app/actions/jobs'
 import { getClients } from '@/app/actions/clients'
 import { getEmployees } from '@/app/actions/employees'
+import { getSubcontractors } from '@/app/actions/subcontractors'
 import { getJobPrices } from '@/app/actions/job-prices'
 import { formatCurrency } from '@/lib/utils'
 import { Plus, Trash2 } from 'lucide-react'
-import type { Job, Client, Employee, JobStatus, JobEmployee, JobLineItem as PrismaJobLineItem } from '@prisma/client'
+import type { Job, Client, Employee, Subcontractor, JobStatus, JobEmployee, JobLineItem as PrismaJobLineItem } from '@prisma/client'
 
 interface JobLineItem {
   id?: string
@@ -25,6 +26,10 @@ type JobWithRelations = Job & {
     employee: Employee
     employeeId: string
   }>
+  subcontractors?: Array<{
+    subcontractor: Subcontractor
+    subcontractorId: string
+  }>
   lineItems?: PrismaJobLineItem[]
 }
 
@@ -34,6 +39,7 @@ interface JobFormData {
   jobDescription: string
   dateWorkCommenced: string
   employeeIds: string[]
+  subcontractorIds: string[]
   lineItems: JobLineItem[]
   status: JobStatus
   notes?: string
@@ -60,6 +66,7 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
   const [error, setError] = useState<string | null>(null)
   const [clients, setClients] = useState<Client[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([])
   const [jobPrices, setJobPrices] = useState<JobPrice[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
@@ -78,6 +85,7 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
           jobDescription: job.jobDescription,
           dateWorkCommenced: job.dateWorkCommenced.toISOString().split('T')[0],
           employeeIds: job.employees?.map(je => je.employee.id) || [],
+          subcontractorIds: job.subcontractors?.map(js => js.subcontractor.id) || [],
           lineItems: job.lineItems?.map(li => ({
             id: li.id,
             description: li.description,
@@ -89,6 +97,7 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
         }
       : {
           employeeIds: [],
+          subcontractorIds: [],
           lineItems: [{ description: '', amount: 0, notes: '' }],
           status: 'PENDING',
         },
@@ -107,12 +116,14 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
     const loadData = async () => {
       try {
         setIsLoading(true)
-        const [clientsData, employeesData] = await Promise.all([
+        const [clientsData, employeesData, subcontractorsData] = await Promise.all([
           getClients(),
           getEmployees(),
+          getSubcontractors(),
         ])
         setClients(clientsData)
         setEmployees(employeesData)
+        setSubcontractors(subcontractorsData)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load data')
       } finally {
@@ -171,6 +182,7 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
       const jobData = {
         ...data,
         dateWorkCommenced: new Date(data.dateWorkCommenced),
+        subcontractorIds: data.subcontractorIds || [],
         lineItems: data.lineItems.map(item => ({
           description: item.description,
           amount: Number(item.amount),
@@ -294,23 +306,44 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="employeeIds">Employees</Label>
-        <select
-          id="employeeIds"
-          multiple
-          {...register('employeeIds')}
-          className="flex min-h-[100px] w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-        >
-          {employees.map((employee) => (
-            <option key={employee.id} value={employee.id}>
-              {employee.name} {employee.employeeId ? `(${employee.employeeId})` : ''}
-            </option>
-          ))}
-        </select>
-        <p className="text-xs text-gray-500">
-          Hold Ctrl/Cmd to select multiple employees
-        </p>
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="employeeIds">Employees</Label>
+          <select
+            id="employeeIds"
+            multiple
+            {...register('employeeIds')}
+            className="flex min-h-[100px] w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+          >
+            {employees.map((employee) => (
+              <option key={employee.id} value={employee.id}>
+                {employee.name} {employee.employeeId ? `(${employee.employeeId})` : ''}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500">
+            Hold Ctrl/Cmd to select multiple
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="subcontractorIds">Subcontractors</Label>
+          <select
+            id="subcontractorIds"
+            multiple
+            {...register('subcontractorIds')}
+            className="flex min-h-[100px] w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+          >
+            {subcontractors.map((subcontractor) => (
+              <option key={subcontractor.id} value={subcontractor.id}>
+                {subcontractor.name}
+              </option>
+            ))}
+          </select>
+          <p className="text-xs text-gray-500">
+            Hold Ctrl/Cmd to select multiple
+          </p>
+        </div>
       </div>
 
       {selectedClientId && jobPrices.length > 0 && (

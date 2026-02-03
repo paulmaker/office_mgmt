@@ -157,7 +157,7 @@ model Client {
 }
 
 model Subcontractor {
-  id                    String      @id @default(cuid())
+  id                    String             @id @default(cuid())
   entityId              String
   name                  String
   email                 String
@@ -166,15 +166,16 @@ model Subcontractor {
   niNumber              String?
   utr                   String?
   cisVerificationNumber String?
-  cisStatus             CISStatus   @default(NOT_VERIFIED)
-  paymentType           PaymentType @default(CIS)
+  cisStatus             CISStatus          @default(NOT_VERIFIED)
+  paymentType           PaymentType        @default(CIS)
   bankDetails           Json?
   notes                 String?
-  createdAt             DateTime    @default(now())
-  updatedAt             DateTime    @updatedAt
-  purchaseInvoices      Invoice[]   @relation("SubcontractorPurchaseInvoices")
-  entity                Entity      @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  purchaseInvoices      Invoice[]          @relation("SubcontractorPurchaseInvoices")
+  entity                Entity             @relation(fields: [entityId], references: [id], onDelete: Cascade)
   timesheets            Timesheet[]
+  jobs                  JobSubcontractor[]
 
   @@unique([entityId, email])
   @@index([entityId])
@@ -372,25 +373,26 @@ model Employee {
 }
 
 model Job {
-  id                String        @id @default(cuid())
+  id                String             @id @default(cuid())
   entityId          String
   jobNumber         String
   clientId          String
   jobDescription    String
   dateWorkCommenced DateTime
   price             Float
-  status            JobStatus     @default(PENDING)
-  invoicePaid       Boolean       @default(false)
+  status            JobStatus          @default(PENDING)
+  invoicePaid       Boolean            @default(false)
   invoiceId         String?
   notes             String?
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  balance           Float         @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  balance           Float              @default(0)
   lastBalanceUpdate DateTime?
   invoices          Invoice[]
-  client            Client        @relation(fields: [clientId], references: [id])
-  entity            Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  client            Client             @relation(fields: [clientId], references: [id])
+  entity            Entity             @relation(fields: [entityId], references: [id], onDelete: Cascade)
   employees         JobEmployee[]
+  subcontractors    JobSubcontractor[]
   lineItems         JobLineItem[]
 
   @@unique([entityId, jobNumber])
@@ -408,6 +410,19 @@ model JobEmployee {
   @@unique([jobId, employeeId])
   @@index([jobId])
   @@index([employeeId])
+}
+
+model JobSubcontractor {
+  id              String        @id @default(cuid())
+  jobId           String
+  subcontractorId String
+  createdAt       DateTime      @default(now())
+  subcontractor   Subcontractor @relation(fields: [subcontractorId], references: [id], onDelete: Cascade)
+  job             Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, subcontractorId])
+  @@index([jobId])
+  @@index([subcontractorId])
 }
 
 model JobLineItem {

@@ -40,6 +40,7 @@ import type { Job } from '@prisma/client'
 type JobWithRelations = Job & {
   client: { name: string; companyName: string | null; address: string | null }
   employees: Array<{ employee: { name: string } }>
+  subcontractors: Array<{ subcontractor: { name: string } }>
   lineItems: Array<{ description: string; amount: number }>
 }
 
@@ -262,7 +263,7 @@ export default function JobsPage() {
                 <TableHead>Job Description</TableHead>
                 <TableHead>Date Commenced</TableHead>
                 <TableHead>Price</TableHead>
-                <TableHead>Employees</TableHead>
+                <TableHead>Workers</TableHead>
                 <TableHead>Line Items</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Invoice Paid</TableHead>
@@ -295,10 +296,15 @@ export default function JobsPage() {
                     </TableCell>
                     <TableCell className="font-medium">{formatCurrency(job.price)}</TableCell>
                     <TableCell>
-                      {job.employees && job.employees.length > 0 ? (
+                      {(job.employees && job.employees.length > 0) || (job.subcontractors && job.subcontractors.length > 0) ? (
                         <div className="flex items-center gap-1 text-sm">
                           <Users className="h-3 w-3 text-gray-400" />
-                          <span>{job.employees.map(e => e.employee.name).join(', ')}</span>
+                          <span>
+                            {[
+                              ...job.employees.map(e => e.employee.name),
+                              ...job.subcontractors.map(s => s.subcontractor.name)
+                            ].join(', ')}
+                          </span>
                         </div>
                       ) : (
                         <span className="text-sm text-gray-400">-</span>

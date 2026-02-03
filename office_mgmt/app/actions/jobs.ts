@@ -50,6 +50,11 @@ export async function getJobs() {
           employee: true,
         },
       },
+      subcontractors: {
+        include: {
+          subcontractor: true,
+        },
+      },
       lineItems: true,
     },
     orderBy: {
@@ -87,6 +92,11 @@ export async function getJob(id: string) {
           employee: true,
         },
       },
+      subcontractors: {
+        include: {
+          subcontractor: true,
+        },
+      },
       lineItems: true,
     },
   })
@@ -113,6 +123,7 @@ export async function createJob(data: {
   jobDescription: string
   dateWorkCommenced: Date
   employeeIds: string[]
+  subcontractorIds?: string[]
   lineItems: Array<{ description: string; amount: number; notes?: string }>
   status?: JobStatus
   notes?: string
@@ -140,6 +151,15 @@ export async function createJob(data: {
         return { success: false, error: 'One or more employees not found or do not belong to your entity' }
     }
 
+    const subcontractorIds = data.subcontractorIds || []
+    if (subcontractorIds.length > 0) {
+      const subcontractors = await prisma.subcontractor.findMany({
+        where: { id: { in: subcontractorIds }, entityId: userEntity.entityId },
+      })
+      if (subcontractors.length !== subcontractorIds.length)
+        return { success: false, error: 'One or more subcontractors not found or do not belong to your entity' }
+    }
+
     const total = data.lineItems.reduce((sum, item) => sum + item.amount, 0)
 
     const existingJob = await prisma.job.findFirst({
@@ -162,6 +182,11 @@ export async function createJob(data: {
           employeeId,
         })),
       },
+      subcontractors: {
+        create: subcontractorIds.map(subcontractorId => ({
+          subcontractorId,
+        })),
+      },
       lineItems: {
         create: data.lineItems.map(item => ({
           description: item.description,
@@ -175,6 +200,11 @@ export async function createJob(data: {
       employees: {
         include: {
           employee: true,
+        },
+      },
+      subcontractors: {
+        include: {
+          subcontractor: true,
         },
       },
       lineItems: true,
@@ -199,6 +229,7 @@ export async function updateJob(
     jobDescription?: string
     dateWorkCommenced?: Date
     employeeIds?: string[]
+    subcontractorIds?: string[]
     lineItems?: Array<{ id?: string; description: string; amount: number; notes?: string }>
     status?: JobStatus
     notes?: string
@@ -214,7 +245,7 @@ export async function updateJob(
 
     const existingJob = await prisma.job.findUnique({
       where: { id },
-      include: { employees: true, lineItems: true },
+      include: { employees: true, subcontractors: true, lineItems: true },
     })
     if (!existingJob) return { success: false, error: 'Job not found' }
 
@@ -234,6 +265,14 @@ export async function updateJob(
       })
       if (employees.length !== data.employeeIds.length)
         return { success: false, error: 'One or more employees not found or do not belong to your entity' }
+    }
+
+    if (data.subcontractorIds) {
+      const subcontractors = await prisma.subcontractor.findMany({
+        where: { id: { in: data.subcontractorIds }, entityId: existingJob.entityId },
+      })
+      if (subcontractors.length !== data.subcontractorIds.length)
+        return { success: false, error: 'One or more subcontractors not found or do not belong to your entity' }
     }
 
     if (data.jobNumber && data.jobNumber !== existingJob.jobNumber) {
@@ -271,6 +310,15 @@ export async function updateJob(
           })),
         },
       }),
+      // Update subcontractors
+      ...(data.subcontractorIds !== undefined && {
+        subcontractors: {
+          deleteMany: {},
+          create: data.subcontractorIds.map(subcontractorId => ({
+            subcontractorId,
+          })),
+        },
+      }),
       // Update line items
       ...(data.lineItems !== undefined && {
         lineItems: {
@@ -288,6 +336,11 @@ export async function updateJob(
       employees: {
         include: {
           employee: true,
+        },
+      },
+      subcontractors: {
+        include: {
+          subcontractor: true,
         },
       },
       lineItems: true,
