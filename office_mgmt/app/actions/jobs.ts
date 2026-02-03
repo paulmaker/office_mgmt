@@ -168,40 +168,46 @@ export async function createJob(data: {
     const userEntity = await getUserEntity(userId)
     if (!userEntity) return { success: false, error: 'User entity not found' }
 
+    // Get all accessible entity IDs for this user
+    const accessibleEntityIds = await getAccessibleEntityIds(userId)
+
     const client = await prisma.client.findUnique({ where: { id: data.clientId } })
     if (!client) return { success: false, error: 'Client not found' }
-    if (client.entityId !== userEntity.entityId) return { success: false, error: 'Client does not belong to your entity' }
+    if (!accessibleEntityIds.includes(client.entityId)) return { success: false, error: 'Client does not belong to your entity' }
+
+    // Use client's entityId for the job and related validations
+    const jobEntityId = client.entityId
 
     if (data.employeeIds.length > 0) {
       const employees = await prisma.employee.findMany({
-        where: { id: { in: data.employeeIds }, entityId: userEntity.entityId },
+        where: { id: { in: data.employeeIds }, entityId: jobEntityId },
       })
       if (employees.length !== data.employeeIds.length)
-        return { success: false, error: 'One or more employees not found or do not belong to your entity' }
+        return { success: false, error: 'One or more employees not found or do not belong to the client\'s entity' }
     }
 
     const subcontractorIds = data.subcontractorIds || []
     if (subcontractorIds.length > 0) {
       const subcontractors = await prisma.subcontractor.findMany({
-        where: { id: { in: subcontractorIds }, entityId: userEntity.entityId },
+        where: { id: { in: subcontractorIds }, entityId: jobEntityId },
       })
       if (subcontractors.length !== subcontractorIds.length)
-        return { success: false, error: 'One or more subcontractors not found or do not belong to your entity' }
+        return { success: false, error: 'One or more subcontractors not found or do not belong to the client\'s entity' }
     }
 
     const total = data.lineItems.reduce((sum, item) => sum + item.amount, 0)
 
     // Auto-generate job number if not provided
-    const jobNumber = data.jobNumber?.trim() || await generateJobNumber(userEntity.entityId)
+    const jobNumber = data.jobNumber?.trim() || await generateJobNumber(jobEntityId)
 
     const existingJob = await prisma.job.findFirst({
-      where: { entityId: userEntity.entityId, jobNumber },
+      where: { entityId: jobEntityId, jobNumber },
     })
     if (existingJob) return { success: false, error: 'A job with this job number already exists' }
 
     const job = await prisma.job.create({
     data: {
-      entityId: userEntity.entityId,
+      entityId: jobEntityId,
       jobNumber,
       clientId: data.clientId,
       jobDescription: data.jobDescription,
