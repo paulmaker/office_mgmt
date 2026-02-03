@@ -30,10 +30,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { TimesheetForm } from '@/components/timesheets/timesheet-form'
-import { getTimesheets, deleteTimesheet, approveTimesheet, rejectTimesheet, getTimesheet } from '@/app/actions/timesheets'
+import { getTimesheets, deleteTimesheet, approveTimesheet, rejectTimesheet, markTimesheetAsPaid, getTimesheet } from '@/app/actions/timesheets'
 import { formatCurrency, formatDate, getTimesheetStatusColor } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
-import { Plus, Search, Check, X, Download, Edit, Trash2, Receipt } from 'lucide-react'
+import { Plus, Search, Check, X, Download, Edit, Trash2, Receipt, Banknote } from 'lucide-react'
 import type { Timesheet } from '@prisma/client'
 
 type TimesheetWithRelations = Timesheet & {
@@ -152,6 +152,24 @@ export default function TimesheetsPage() {
         variant: 'destructive',
         title: 'Error',
         description: error instanceof Error ? error.message : 'Failed to reject timesheet',
+      })
+    }
+  }
+
+  const handleMarkAsPaid = async (id: string) => {
+    try {
+      await markTimesheetAsPaid(id)
+      await loadTimesheets()
+      toast({
+        variant: 'success',
+        title: 'Timesheet marked as paid',
+        description: 'Timesheet has been marked as paid.',
+      })
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to mark timesheet as paid',
       })
     }
   }
@@ -411,6 +429,7 @@ export default function TimesheetsPage() {
                                 size="sm"
                                 className="text-green-600 hover:text-green-700"
                                 onClick={() => handleApprove(timesheet.id)}
+                                title="Approve"
                               >
                                 <Check className="h-4 w-4" />
                               </Button>
@@ -419,10 +438,22 @@ export default function TimesheetsPage() {
                                 size="sm"
                                 className="text-red-600 hover:text-red-700"
                                 onClick={() => handleReject(timesheet.id)}
+                                title="Reject"
                               >
                                 <X className="h-4 w-4" />
                               </Button>
                             </>
+                          )}
+                          {(timesheet.status === 'APPROVED' || timesheet.status === 'PROCESSED') && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-blue-600 hover:text-blue-700"
+                              onClick={() => handleMarkAsPaid(timesheet.id)}
+                              title="Mark as Paid"
+                            >
+                              <Banknote className="h-4 w-4" />
+                            </Button>
                           )}
                           <Button
                             variant="ghost"

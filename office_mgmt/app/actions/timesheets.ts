@@ -345,6 +345,57 @@ export async function approveTimesheet(id: string) {
 }
 
 /**
+ * Mark a timesheet as paid
+ */
+export async function markTimesheetAsPaid(id: string) {
+  const session = await auth()
+  if (!session?.user) {
+    throw new Error('Unauthorized')
+  }
+
+  const userId = session.user.id as string
+
+  // Check permission
+  const canApprove = await hasPermission(userId, 'timesheets', 'approve')
+  if (!canApprove) {
+    throw new Error('You do not have permission to mark timesheets as paid')
+  }
+
+  // Get the existing timesheet
+  const existingTimesheet = await prisma.timesheet.findUnique({
+    where: { id },
+  })
+
+  if (!existingTimesheet) {
+    throw new Error('Timesheet not found')
+  }
+
+  // Verify user can access this timesheet's entity
+  const entityIds = await getAccessibleEntityIds(userId)
+  if (!entityIds.includes(existingTimesheet.entityId)) {
+    throw new Error('You do not have permission to mark this timesheet as paid')
+  }
+
+  // Only approved or processed timesheets can be marked as paid
+  if (existingTimesheet.status !== 'APPROVED' && existingTimesheet.status !== 'PROCESSED') {
+    throw new Error('Only approved or processed timesheets can be marked as paid')
+  }
+
+  // Update timesheet
+  const timesheet = await prisma.timesheet.update({
+    where: { id },
+    data: {
+      status: 'PAID',
+      paidAt: new Date(),
+    },
+  })
+
+  revalidatePath('/timesheets')
+  revalidatePath('/payroll')
+  return timesheet
+}
+
+/**
  * Reject a timesheet
  */
 export async function rejectTimesheet(id: string, reason?: string) {
