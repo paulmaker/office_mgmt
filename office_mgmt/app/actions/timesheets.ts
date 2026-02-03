@@ -6,7 +6,7 @@ import { hasPermission } from '@/lib/platform-core/rbac'
 import { getUserEntity, getAccessibleEntityIds } from '@/lib/platform-core/multi-tenancy'
 import { revalidatePath } from 'next/cache'
 import { calculateCISDeduction } from '@/lib/utils'
-import type { TimesheetStatus, CISStatus } from '@prisma/client'
+import type { TimesheetStatus } from '@prisma/client'
 import { requireModule } from '@/lib/module-access'
 
 /**
@@ -19,7 +19,7 @@ export async function getTimesheets() {
   }
 
   const userId = session.user.id as string
-  const entityId = (session.user as any).entityId
+  const entityId = session.user.entityId
 
   // Check module access
   await requireModule(entityId, 'timesheets')
@@ -160,9 +160,10 @@ export async function createTimesheet(data: {
       })
       revalidatePath('/timesheets')
       return { success: true, data: timesheet }
-    } catch (error: any) {
-      const errorMessage = error?.message || ''
-      const errorCode = error?.code || ''
+    } catch (error: unknown) {
+      const err = error as { message?: string; code?: string }
+      const errorMessage = err?.message || ''
+      const errorCode = err?.code || ''
       if (
         errorMessage.includes('additionalHours') ||
         (errorMessage.includes('column') && errorMessage.includes('does not exist')) ||
@@ -187,7 +188,7 @@ export async function createTimesheet(data: {
             submittedVia: data.submittedVia || 'MANUAL',
             status: 'SUBMITTED',
             notes: data.notes,
-          } as any,
+          },
           include: { subcontractor: true },
         })
         revalidatePath('/timesheets')
@@ -248,8 +249,8 @@ export async function updateTimesheet(
 
     const hoursWorked = data.hoursWorked ?? existingTimesheet.hoursWorked
   const rate = data.rate ?? existingTimesheet.rate
-  const additionalHours = data.additionalHours ?? (existingTimesheet as any).additionalHours ?? 0
-  const additionalHoursRate = data.additionalHoursRate ?? (existingTimesheet as any).additionalHoursRate ?? 0
+  const additionalHours = data.additionalHours ?? existingTimesheet.additionalHours ?? 0
+  const additionalHoursRate = data.additionalHoursRate ?? existingTimesheet.additionalHoursRate ?? 0
   const regularAmount = hoursWorked * rate
   const additionalAmount = additionalHours * additionalHoursRate
   const grossAmount = regularAmount + additionalAmount
