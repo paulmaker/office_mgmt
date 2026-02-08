@@ -464,15 +464,18 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
         />
       </div>
 
-      {/* References */}
-      <div className="space-y-2">
-        <Label htmlFor="purchaseOrderNumber">Purchase Order Number</Label>
-        <Input
-          id="purchaseOrderNumber"
-          {...register('purchaseOrderNumber')}
-          placeholder="PO-12345"
-        />
-      </div>
+      {/* References (Purchase) */}
+      {invoiceType === 'PURCHASE' && (
+        <div className="space-y-2">
+          <Label htmlFor="purchaseOrderNumber" className="text-gray-600">Purchase Order Number</Label>
+          <Input
+            id="purchaseOrderNumber"
+            {...register('purchaseOrderNumber')}
+            placeholder="e.g. PO-12345"
+            className="max-w-xs"
+          />
+        </div>
+      )}
 
       {/* Job Selection */}
       {invoiceType === 'SALES' && allJobs.length > 0 && (
@@ -545,13 +548,14 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
       )}
 
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <Label>Line Items</Label>
+        <div className="flex items-center justify-between gap-4">
+          <Label className="text-base font-medium">Line Items</Label>
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={addLineItem}
+            className="shrink-0 border-gray-300"
           >
             <Plus className="h-4 w-4 mr-1" />
             Add Line Item
@@ -565,17 +569,17 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Job #</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Description</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Amount</th>
-                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500">Actions</th>
+                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 w-12">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y">
+            <tbody className="divide-y divide-gray-100">
               {fields.map((field, index) => (
                 <tr key={field.id}>
                   <td className="px-3 py-2">
                     <Input
                       {...register(`lineItems.${index}.jobNumber` as const)}
-                      placeholder="Job #"
-                      className="border-0 p-0 h-auto text-xs"
+                      placeholder={invoiceType === 'PURCHASE' ? 'Ref' : 'Optional'}
+                      className="border-0 p-0 h-auto text-xs placeholder:text-gray-400"
                     />
                   </td>
                   <td className="px-3 py-2">
@@ -583,8 +587,8 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
                       {...register(`lineItems.${index}.description` as const, {
                         required: 'Description is required',
                       })}
-                      placeholder="Description"
-                      className="border-0 p-0 h-auto"
+                      placeholder="Item description"
+                      className="border-0 p-0 h-auto placeholder:text-gray-400"
                     />
                   </td>
                   <td className="px-3 py-2">
@@ -597,7 +601,7 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
                         min: { value: 0.01, message: 'Must be greater than 0' },
                       })}
                       placeholder="0.00"
-                      className="border-0 p-0 h-auto"
+                      className="border-0 p-0 h-auto w-24 placeholder:text-gray-400"
                     />
                   </td>
                   <td className="px-3 py-2 text-right">
@@ -615,19 +619,19 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
                 </tr>
               ))}
             </tbody>
-            <tfoot className="bg-gray-50 border-t-2">
+            <tfoot className="bg-gray-50 border-t-2 border-gray-200">
               <tr>
-                <td colSpan={2} className="px-3 py-2 text-right font-medium">
-                  Subtotal (before discount):
+                <td colSpan={2} className="px-3 py-2.5 text-right font-medium text-gray-700">
+                  Subtotal (before discount)
                 </td>
-                <td className="px-3 py-2 font-medium">
+                <td className="px-3 py-2.5 font-medium">
                   {formatCurrency(watchedLineItems?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0)}
                 </td>
               </tr>
               <tr>
-                <td colSpan={2} className="px-3 py-2 text-right">
+                <td colSpan={2} className="px-3 py-2.5 text-right">
                   <div className="flex items-center gap-2 justify-end">
-                    <Label className="text-xs font-normal">Discount:</Label>
+                    <Label className="text-xs font-normal text-gray-600">Discount</Label>
                     <select
                       {...register('discountType')}
                       className="h-7 text-xs border border-gray-300 rounded px-2"
@@ -656,7 +660,7 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
                     )}
                   </div>
                 </td>
-                <td className="px-3 py-2">
+                <td className="px-3 py-2.5">
                   {discount > 0 ? (
                     <span className="text-red-600">-{formatCurrency(discount)}</span>
                   ) : (
@@ -665,17 +669,17 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
                 </td>
               </tr>
               <tr>
-                <td colSpan={2} className="px-3 py-2 text-right font-medium">
-                  Subtotal (after discount):
+                <td colSpan={2} className="px-3 py-2.5 text-right font-medium text-gray-700">
+                  Subtotal (after discount)
                 </td>
-                <td className="px-3 py-2 font-medium">
+                <td className="px-3 py-2.5 font-medium">
                   {formatCurrency(subtotal)}
                 </td>
               </tr>
               {invoiceType === 'SALES' && (
                 <>
-                  <tr>
-                    <td colSpan={2} className="px-3 py-2 text-right">
+                  <tr className="border-t border-gray-200">
+                    <td colSpan={2} className="px-3 py-2.5 text-right">
                       <div className="flex items-center gap-2 justify-end">
                         <input
                           type="checkbox"
@@ -683,64 +687,97 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
                           {...register('reverseCharge')}
                           className="h-4 w-4 rounded border-gray-300"
                         />
-                        <Label htmlFor="reverseCharge" className="text-sm font-normal">
+                        <Label htmlFor="reverseCharge" className="text-sm font-normal text-gray-600">
                           Reverse Charge VAT
                         </Label>
                       </div>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2.5">
                       {reverseCharge ? (
-                        <span className="text-sm text-gray-500">VAT: £0.00 (Reverse Charge)</span>
+                        <span className="text-sm text-gray-500">£0.00 (Reverse Charge)</span>
                       ) : (
-                        <span className="text-sm">
+                        <span className="text-sm font-medium">
                           VAT ({vatRate}%): {formatCurrency(vatAmount)}
                         </span>
                       )}
                     </td>
                   </tr>
                   <tr>
-                    <td colSpan={2} className="px-3 py-2 text-right">
-                      <Label htmlFor="vatRate" className="text-sm font-normal">VAT Rate:</Label>
+                    <td colSpan={2} className="px-3 py-2.5 text-right">
+                      <Label htmlFor="vatRate" className="text-sm font-normal text-gray-600">VAT Rate</Label>
                     </td>
-                    <td className="px-3 py-2">
-                      <Input
-                        type="number"
-                        step="0.1"
-                        {...register('vatRate', {
-                          valueAsNumber: true,
-                          min: 0,
-                          max: 100,
-                        })}
-                        className="w-20 h-8 text-sm"
-                      />
-                      <span className="text-sm ml-1">%</span>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          type="number"
+                          step="0.1"
+                          {...register('vatRate', {
+                            valueAsNumber: true,
+                            min: 0,
+                            max: 100,
+                          })}
+                          className="w-20 h-8 text-sm"
+                        />
+                        <span className="text-sm text-gray-500">%</span>
+                      </div>
                     </td>
                   </tr>
                 </>
               )}
               {invoiceType === 'PURCHASE' && (
-                <tr>
-                  <td colSpan={2} className="px-3 py-2 text-right">
-                    <Label htmlFor="cisDeduction" className="text-sm font-normal">CIS Deduction:</Label>
-                  </td>
-                  <td className="px-3 py-2">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      {...register('cisDeduction', {
-                        valueAsNumber: true,
-                        min: 0,
-                      })}
-                      className="w-24 h-8 text-sm"
-                    />
-                  </td>
-                </tr>
+                <>
+                  <tr className="border-t border-gray-200">
+                    <td colSpan={2} className="px-3 py-2.5 text-right">
+                      <Label htmlFor="vatRatePurchase" className="text-sm font-normal text-gray-600">VAT Rate</Label>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center gap-1.5">
+                        <Input
+                          type="number"
+                          step="0.1"
+                          id="vatRatePurchase"
+                          {...register('vatRate', {
+                            valueAsNumber: true,
+                            min: 0,
+                            max: 100,
+                          })}
+                          className="w-20 h-8 text-sm"
+                        />
+                        <span className="text-sm text-gray-500">%</span>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colSpan={2} className="px-3 py-2.5 text-right font-medium text-gray-700">
+                      VAT ({vatRate}%)
+                    </td>
+                    <td className="px-3 py-2.5 font-medium">
+                      {formatCurrency(vatAmount)}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td colSpan={2} className="px-3 py-2.5 text-right">
+                      <Label htmlFor="cisDeduction" className="text-sm font-normal text-gray-600">CIS Deduction</Label>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        {...register('cisDeduction', {
+                          valueAsNumber: true,
+                          min: 0,
+                        })}
+                        className="w-24 h-8 text-sm"
+                      />
+                    </td>
+                  </tr>
+                </>
               )}
-              <tr className="bg-gray-100">
-                <td colSpan={2} className="px-3 py-2 text-right font-bold">
-                  Total:
+              <tr className="bg-gray-100 border-t-2 border-gray-200">
+                <td colSpan={2} className="px-3 py-3 text-right font-bold">
+                  Total
                 </td>
-                <td className="px-3 py-2 font-bold text-lg">
+                <td className="px-3 py-3 font-bold text-lg">
                   {formatCurrency(total)}
                 </td>
               </tr>
