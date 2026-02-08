@@ -3,7 +3,8 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getUserEntity, getAccessibleEntityIds } from '@/lib/platform-core/multi-tenancy'
+import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
+import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 import type { CISStatus, PaymentType } from '@prisma/client'
 import { requireModule } from '@/lib/module-access'
@@ -18,7 +19,7 @@ export async function getSubcontractors() {
   }
 
   const userId = session.user.id as string
-  const entityId = (session.user as any).entityId
+  const entityId = requireSessionEntityId(session)
 
   // Check module access
   await requireModule(entityId, 'subcontractors')
@@ -29,20 +30,8 @@ export async function getSubcontractors() {
     throw new Error('You do not have permission to view subcontractors')
   }
 
-  // Get accessible entity IDs
-  const entityIds = await getAccessibleEntityIds(userId)
-
-  if (entityIds.length === 0) {
-    return []
-  }
-
-  // Fetch subcontractors scoped to accessible entities
   const subcontractors = await prisma.subcontractor.findMany({
-    where: {
-      entityId: {
-        in: entityIds,
-      },
-    },
+    where: { entityId },
     orderBy: {
       createdAt: 'desc',
     },
@@ -77,9 +66,8 @@ export async function getSubcontractor(id: string) {
     throw new Error('Subcontractor not found')
   }
 
-  // Verify user can access this subcontractor's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(subcontractor.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (subcontractor.entityId !== entityId) {
     throw new Error('You do not have permission to access this subcontractor')
   }
 
@@ -175,8 +163,8 @@ export async function updateSubcontractor(
     const existingSubcontractor = await prisma.subcontractor.findUnique({ where: { id } })
     if (!existingSubcontractor) return { success: false, error: 'Subcontractor not found' }
 
-    const entityIds = await getAccessibleEntityIds(userId)
-    if (!entityIds.includes(existingSubcontractor.entityId))
+    const entityId = requireSessionEntityId(session)
+    if (existingSubcontractor.entityId !== entityId)
       return { success: false, error: 'You do not have permission to update this subcontractor' }
 
     if (data.email && data.email !== existingSubcontractor.email) {
@@ -238,8 +226,8 @@ export async function deleteSubcontractor(id: string) {
   }
 
   // Verify user can access this subcontractor's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingSubcontractor.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (existingSubcontractor.entityId !== entityId) {
     throw new Error('You do not have permission to delete this subcontractor')
   }
 

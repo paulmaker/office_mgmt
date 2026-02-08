@@ -3,7 +3,8 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getUserEntity, getAccessibleEntityIds } from '@/lib/platform-core/multi-tenancy'
+import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
+import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 
 /**
@@ -23,20 +24,10 @@ export async function getEmployees() {
     throw new Error('You do not have permission to view employees')
   }
 
-  // Get accessible entity IDs
-  const entityIds = await getAccessibleEntityIds(userId)
+  const entityId = requireSessionEntityId(session)
 
-  if (entityIds.length === 0) {
-    return []
-  }
-
-  // Fetch employees scoped to accessible entities
   const employees = await prisma.employee.findMany({
-    where: {
-      entityId: {
-        in: entityIds,
-      },
-    },
+    where: { entityId },
     orderBy: {
       createdAt: 'desc',
     },
@@ -71,9 +62,8 @@ export async function getEmployee(id: string) {
     throw new Error('Employee not found')
   }
 
-  // Verify user can access this employee's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(employee.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (employee.entityId !== entityId) {
     throw new Error('You do not have permission to access this employee')
   }
 
@@ -160,8 +150,8 @@ export async function updateEmployee(
     const existingEmployee = await prisma.employee.findUnique({ where: { id } })
     if (!existingEmployee) return { success: false, error: 'Employee not found' }
 
-    const entityIds = await getAccessibleEntityIds(userId)
-    if (!entityIds.includes(existingEmployee.entityId))
+    const entityId = requireSessionEntityId(session)
+    if (existingEmployee.entityId !== entityId)
       return { success: false, error: 'You do not have permission to update this employee' }
 
     if (data.email && data.email !== existingEmployee.email) {
@@ -225,8 +215,8 @@ export async function deleteEmployee(id: string) {
   }
 
   // Verify user can access this employee's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingEmployee.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (existingEmployee.entityId !== entityId) {
     throw new Error('You do not have permission to delete this employee')
   }
 

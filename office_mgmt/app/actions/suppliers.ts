@@ -3,7 +3,8 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getUserEntity, getAccessibleEntityIds } from '@/lib/platform-core/multi-tenancy'
+import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
+import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 
 /**
@@ -23,20 +24,10 @@ export async function getSuppliers() {
     throw new Error('You do not have permission to view suppliers')
   }
 
-  // Get accessible entity IDs
-  const entityIds = await getAccessibleEntityIds(userId)
+  const entityId = requireSessionEntityId(session)
 
-  if (entityIds.length === 0) {
-    return []
-  }
-
-  // Fetch suppliers scoped to accessible entities
   const suppliers = await prisma.supplier.findMany({
-    where: {
-      entityId: {
-        in: entityIds,
-      },
-    },
+    where: { entityId },
     orderBy: {
       createdAt: 'desc',
     },
@@ -71,9 +62,8 @@ export async function getSupplier(id: string) {
     throw new Error('Supplier not found')
   }
 
-  // Verify user can access this supplier's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(supplier.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (supplier.entityId !== entityId) {
     throw new Error('You do not have permission to access this supplier')
   }
 
@@ -158,8 +148,8 @@ export async function updateSupplier(
     const existingSupplier = await prisma.supplier.findUnique({ where: { id } })
     if (!existingSupplier) return { success: false, error: 'Supplier not found' }
 
-    const entityIds = await getAccessibleEntityIds(userId)
-    if (!entityIds.includes(existingSupplier.entityId))
+    const entityId = requireSessionEntityId(session)
+    if (existingSupplier.entityId !== entityId)
       return { success: false, error: 'You do not have permission to update this supplier' }
 
     const supplier = await prisma.supplier.update({
@@ -213,8 +203,8 @@ export async function deleteSupplier(id: string) {
   }
 
   // Verify user can access this supplier's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingSupplier.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (existingSupplier.entityId !== entityId) {
     throw new Error('You do not have permission to delete this supplier')
   }
 

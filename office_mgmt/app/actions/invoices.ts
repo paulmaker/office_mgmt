@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getUserEntity, getAccessibleEntityIds } from '@/lib/platform-core/multi-tenancy'
+import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 import { generateInvoiceNumber } from '@/lib/invoice-code'
 import type { InvoiceType, InvoiceStatus } from '@prisma/client'
@@ -28,7 +28,7 @@ export async function getInvoices() {
   }
 
   const userId = session.user.id as string
-  const entityId = (session.user as any).entityId
+  const entityId = requireSessionEntityId(session)
 
   // Check module access
   await requireModule(entityId, 'invoices')
@@ -39,20 +39,9 @@ export async function getInvoices() {
     throw new Error('You do not have permission to view invoices')
   }
 
-  // Get accessible entity IDs
-  const entityIds = await getAccessibleEntityIds(userId)
-
-  if (entityIds.length === 0) {
-    return []
-  }
-
-  // Fetch invoices scoped to accessible entities
+  // Fetch invoices scoped to current session entity
   const invoices = await prisma.invoice.findMany({
-    where: {
-      entityId: {
-        in: entityIds,
-      },
-    },
+    where: { entityId },
     include: {
       client: true,
       subcontractor: true,
@@ -103,9 +92,9 @@ export async function getInvoice(id: string) {
     throw new Error('Invoice not found')
   }
 
-  // Verify user can access this invoice's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(invoice.entityId)) {
+  // Verify invoice belongs to current session entity
+  const entityId = requireSessionEntityId(session)
+  if (invoice.entityId !== entityId) {
     throw new Error('You do not have permission to access this invoice')
   }
 
@@ -151,11 +140,7 @@ export async function createInvoice(data: {
     const canCreate = await hasPermission(userId, 'invoices', 'create')
     if (!canCreate) return { success: false, error: 'You do not have permission to create invoices' }
 
-    const userEntity = await getUserEntity(userId)
-    if (!userEntity) return { success: false, error: 'User entity not found' }
-
-    // Get all accessible entity IDs for this user
-    const accessibleEntityIds = await getAccessibleEntityIds(userId)
+    const entityId = requireSessionEntityId(session)
 
     // Check that at least one party is specified (treating empty strings as falsy)
     const hasClient = data.clientId && data.clientId.trim() !== ''
@@ -165,28 +150,25 @@ export async function createInvoice(data: {
     if (!hasClient && !hasSubcontractor && !hasSupplier)
       return { success: false, error: 'Invoice must have a client, subcontractor, or supplier' }
 
-  // Determine the entityId from the primary party and validate access
-  let invoiceEntityId: string
-  
+  // Validate that the selected party belongs to the current session entity
   if (hasClient) {
     const client = await prisma.client.findUnique({ where: { id: data.clientId! } })
     if (!client) return { success: false, error: 'Client not found' }
-    if (!accessibleEntityIds.includes(client.entityId)) 
-      return { success: false, error: 'Client does not belong to an accessible entity' }
-    invoiceEntityId = client.entityId
+    if (client.entityId !== entityId)
+      return { success: false, error: 'Client does not belong to your current entity' }
   } else if (hasSubcontractor) {
     const subcontractor = await prisma.subcontractor.findUnique({ where: { id: data.subcontractorId! } })
     if (!subcontractor) return { success: false, error: 'Subcontractor not found' }
-    if (!accessibleEntityIds.includes(subcontractor.entityId))
-      return { success: false, error: 'Subcontractor does not belong to an accessible entity' }
-    invoiceEntityId = subcontractor.entityId
+    if (subcontractor.entityId !== entityId)
+      return { success: false, error: 'Subcontractor does not belong to your current entity' }
   } else {
     const supplier = await prisma.supplier.findUnique({ where: { id: data.supplierId! } })
     if (!supplier) return { success: false, error: 'Supplier not found' }
-    if (!accessibleEntityIds.includes(supplier.entityId))
-      return { success: false, error: 'Supplier does not belong to an accessible entity' }
-    invoiceEntityId = supplier.entityId
+    if (supplier.entityId !== entityId)
+      return { success: false, error: 'Supplier does not belong to your current entity' }
   }
+
+  const invoiceEntityId = entityId
 
   let invoiceNumber = ''
   if (data.type === 'SALES') {
@@ -326,11 +308,10 @@ export async function updateInvoice(
     const canUpdate = await hasPermission(userId, 'invoices', 'update')
     if (!canUpdate) return { success: false, error: 'You do not have permission to update invoices' }
 
+    const entityId = requireSessionEntityId(session)
     const existingInvoice = await prisma.invoice.findUnique({ where: { id } })
     if (!existingInvoice) return { success: false, error: 'Invoice not found' }
-
-    const entityIds = await getAccessibleEntityIds(userId)
-    if (!entityIds.includes(existingInvoice.entityId))
+    if (existingInvoice.entityId !== entityId)
       return { success: false, error: 'You do not have permission to update this invoice' }
 
     let subtotal = existingInvoice.subtotal
@@ -441,9 +422,8 @@ export async function deleteInvoice(id: string) {
     throw new Error('Invoice not found')
   }
 
-  // Verify user can access this invoice's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingInvoice.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (existingInvoice.entityId !== entityId) {
     throw new Error('You do not have permission to delete this invoice')
   }
 
@@ -494,9 +474,8 @@ export async function markInvoicePaid(
     throw new Error('Invoice not found')
   }
 
-  // Verify user can access this invoice's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingInvoice.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (existingInvoice.entityId !== entityId) {
     throw new Error('You do not have permission to update this invoice')
   }
 

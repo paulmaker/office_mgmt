@@ -3,10 +3,13 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getUserEntity, getAccessibleEntityIds } from '@/lib/platform-core/multi-tenancy'
+import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
+import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 import type { JobStatus } from '@prisma/client'
 import { requireModule } from '@/lib/module-access'
+import { resend, EMAIL_FROM } from '@/lib/email'
+import { formatDate } from '@/lib/utils'
 
 /**
  * Get all jobs for the current user's accessible entities
@@ -18,7 +21,7 @@ export async function getJobs() {
   }
 
   const userId = session.user.id as string
-  const entityId = (session.user as any).entityId
+  const entityId = requireSessionEntityId(session)
 
   // Check module access
   await requireModule(entityId, 'jobs')
@@ -29,20 +32,9 @@ export async function getJobs() {
     throw new Error('You do not have permission to view jobs')
   }
 
-  // Get accessible entity IDs
-  const entityIds = await getAccessibleEntityIds(userId)
-
-  if (entityIds.length === 0) {
-    return []
-  }
-
-  // Fetch jobs scoped to accessible entities
+  // Fetch jobs scoped to current session entity
   const jobs = await prisma.job.findMany({
-    where: {
-      entityId: {
-        in: entityIds,
-      },
-    },
+    where: { entityId },
     include: {
       client: true,
       employees: {
@@ -105,9 +97,8 @@ export async function getJob(id: string) {
     throw new Error('Job not found')
   }
 
-  // Verify user can access this job's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(job.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (job.entityId !== entityId) {
     throw new Error('You do not have permission to access this job')
   }
 
@@ -153,7 +144,7 @@ export async function createJob(data: {
   dateWorkCommenced: Date
   employeeIds: string[]
   subcontractorIds?: string[]
-  lineItems: Array<{ description: string; amount: number; notes?: string }>
+  lineItems: Array<{ address?: string; description: string; amount: number; notes?: string }>
   status?: JobStatus
   notes?: string
 }) {
@@ -169,14 +160,13 @@ export async function createJob(data: {
     if (!userEntity) return { success: false, error: 'User entity not found' }
 
     // Get all accessible entity IDs for this user
-    const accessibleEntityIds = await getAccessibleEntityIds(userId)
+    const entityId = requireSessionEntityId(session)
 
     const client = await prisma.client.findUnique({ where: { id: data.clientId } })
     if (!client) return { success: false, error: 'Client not found' }
-    if (!accessibleEntityIds.includes(client.entityId)) return { success: false, error: 'Client does not belong to your entity' }
+    if (client.entityId !== entityId) return { success: false, error: 'Client does not belong to your entity' }
 
-    // Use client's entityId for the job and related validations
-    const jobEntityId = client.entityId
+    const jobEntityId = entityId
 
     if (data.employeeIds.length > 0) {
       const employees = await prisma.employee.findMany({
@@ -227,6 +217,7 @@ export async function createJob(data: {
       },
       lineItems: {
         create: data.lineItems.map(item => ({
+          address: item.address?.trim() || null,
           description: item.description,
           amount: item.amount,
           notes: item.notes,
@@ -268,7 +259,7 @@ export async function updateJob(
     dateWorkCommenced?: Date
     employeeIds?: string[]
     subcontractorIds?: string[]
-    lineItems?: Array<{ id?: string; description: string; amount: number; notes?: string }>
+    lineItems?: Array<{ id?: string; address?: string; description: string; amount: number; notes?: string }>
     status?: JobStatus
     notes?: string
   }
@@ -287,8 +278,8 @@ export async function updateJob(
     })
     if (!existingJob) return { success: false, error: 'Job not found' }
 
-    const entityIds = await getAccessibleEntityIds(userId)
-    if (!entityIds.includes(existingJob.entityId))
+    const entityId = requireSessionEntityId(session)
+    if (existingJob.entityId !== entityId)
       return { success: false, error: 'You do not have permission to update this job' }
 
     if (data.clientId) {
@@ -362,6 +353,7 @@ export async function updateJob(
         lineItems: {
           deleteMany: {},
           create: data.lineItems.map(item => ({
+            address: item.address?.trim() || null,
             description: item.description,
             amount: item.amount,
             notes: item.notes,
@@ -420,8 +412,8 @@ export async function deleteJob(id: string) {
   }
 
   // Verify user can access this job's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingJob.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (existingJob.entityId !== entityId) {
     throw new Error('You do not have permission to delete this job')
   }
 
@@ -450,14 +442,8 @@ export async function getJobsByClient(clientId: string) {
     throw new Error('You do not have permission to view jobs')
   }
 
-  // Get accessible entity IDs
-  const entityIds = await getAccessibleEntityIds(userId)
+  const entityId = requireSessionEntityId(session)
 
-  if (entityIds.length === 0) {
-    return []
-  }
-
-  // Get the client to verify access
   const client = await prisma.client.findUnique({
     where: { id: clientId },
   })
@@ -466,7 +452,7 @@ export async function getJobsByClient(clientId: string) {
     throw new Error('Client not found')
   }
 
-  if (!entityIds.includes(client.entityId)) {
+  if (client.entityId !== entityId) {
     throw new Error('You do not have permission to access this client')
   }
 
@@ -487,4 +473,101 @@ export async function getJobsByClient(clientId: string) {
   })
 
   return jobs
+}
+
+/**
+ * Send job sheet email to all assigned subcontractors (contractors).
+ * Email includes address, description, job commencement, notes, and line items without prices.
+ */
+export async function sendJobSheetEmail(jobId: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await auth()
+    if (!session?.user) return { success: false, error: 'Unauthorized' }
+
+    const userId = session.user.id as string
+    const canRead = await hasPermission(userId, 'jobs', 'read')
+    if (!canRead) return { success: false, error: 'You do not have permission to view jobs' }
+
+    const entityId = requireSessionEntityId(session)
+
+    const job = await prisma.job.findUnique({
+      where: { id: jobId },
+      include: {
+        client: true,
+        subcontractors: {
+          include: {
+            subcontractor: true,
+          },
+        },
+        lineItems: true,
+      },
+    })
+
+    if (!job) return { success: false, error: 'Job not found' }
+    if (job.entityId !== entityId) return { success: false, error: 'You do not have permission to access this job' }
+
+    const contractorsWithEmail = job.subcontractors.filter(
+      (js) => js.subcontractor.email?.trim()
+    )
+    if (contractorsWithEmail.length === 0) {
+      return { success: false, error: 'No contractors with email addresses are assigned to this job' }
+    }
+
+    const lineItemsHtml = job.lineItems
+      .map(
+        (li) =>
+          `<tr><td style="padding:6px 12px;border-bottom:1px solid #eee">${escapeHtml((li as { address?: string | null }).address || '')}</td><td style="padding:6px 12px;border-bottom:1px solid #eee">${escapeHtml(li.description)}</td><td style="padding:6px 12px;border-bottom:1px solid #eee">${escapeHtml(li.notes || '')}</td></tr>`
+      )
+      .join('')
+
+    const html = `
+      <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
+        <h2 style="margin-bottom:16px">Job Sheet: ${escapeHtml(job.jobNumber)}</h2>
+        <p><strong>Description:</strong><br/>${escapeHtml(job.jobDescription)}</p>
+        <p><strong>Job commencement:</strong> ${formatDate(job.dateWorkCommenced)}</p>
+        ${job.notes ? `<p><strong>Notes:</strong><br/>${escapeHtml(job.notes)}</p>` : ''}
+        <p><strong>Line items (no prices):</strong></p>
+        <table style="width:100%;border-collapse:collapse;margin-top:8px">
+          <thead>
+            <tr style="background:#f5f5f5">
+              <th style="padding:8px 12px;text-align:left">Address</th>
+              <th style="padding:8px 12px;text-align:left">Description</th>
+              <th style="padding:8px 12px;text-align:left">Notes</th>
+            </tr>
+          </thead>
+          <tbody>${lineItemsHtml}</tbody>
+        </table>
+        <p style="margin-top:24px;color:#666;font-size:12px">This is a job sheet from your client. Do not reply to this email.</p>
+      </div>
+    `
+
+    const subject = `Job Sheet: ${job.jobNumber} - ${job.jobDescription.slice(0, 50)}${job.jobDescription.length > 50 ? '...' : ''}`
+
+    for (const { subcontractor } of contractorsWithEmail) {
+      await resend.emails.send({
+        from: EMAIL_FROM,
+        to: subcontractor.email,
+        subject,
+        html,
+      })
+    }
+
+    revalidatePath('/jobs')
+    return { success: true }
+  } catch (e) {
+    console.error('sendJobSheetEmail error:', e)
+    return {
+      success: false,
+      error: e instanceof Error ? e.message : 'Failed to send job sheet email',
+    }
+  }
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
 }

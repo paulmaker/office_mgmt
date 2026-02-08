@@ -31,10 +31,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { JobForm } from '@/components/jobs/job-form'
-import { getJobs, deleteJob, getJob } from '@/app/actions/jobs'
+import { getJobs, deleteJob, getJob, sendJobSheetEmail } from '@/app/actions/jobs'
 import { formatCurrency, formatDate, getJobStatusColor } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
-import { Plus, Search, Edit, Trash2, CheckCircle2, XCircle, Users } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, CheckCircle2, XCircle, Users, Mail } from 'lucide-react'
 import type { Job } from '@prisma/client'
 
 type JobWithRelations = Job & {
@@ -54,6 +54,7 @@ export default function JobsPage() {
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [jobToDelete, setJobToDelete] = useState<JobWithRelations | null>(null)
+  const [emailingJobId, setEmailingJobId] = useState<string | null>(null)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -122,6 +123,37 @@ export default function JobsPage() {
       })
     } finally {
       setDeletingJobId(null)
+    }
+  }
+
+  const handleEmailToContractors = async (job: JobWithRelations) => {
+    try {
+      setEmailingJobId(job.id)
+      const result = await sendJobSheetEmail(job.id)
+      if (result.success) {
+        const count = job.subcontractors?.length ?? 0
+        toast({
+          variant: 'success',
+          title: 'Job sheet sent',
+          description: count > 0
+            ? `Job sheet emailed to ${count} contractor${count !== 1 ? 's' : ''}.`
+            : 'Job sheet sent.',
+        })
+      } else {
+        toast({
+          variant: 'destructive',
+          title: 'Failed to send',
+          description: result.error ?? 'Could not send job sheet email',
+        })
+      }
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to send job sheet',
+      })
+    } finally {
+      setEmailingJobId(null)
     }
   }
 
@@ -338,6 +370,19 @@ export default function JobsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEmailToContractors(job)}
+                          disabled={emailingJobId === job.id || !(job.subcontractors?.length)}
+                          title={
+                            job.subcontractors?.length
+                              ? 'Email job sheet to assigned contractors'
+                              : 'Assign at least one contractor (subcontractor) to enable'
+                          }
+                        >
+                          <Mail className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"

@@ -3,7 +3,8 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getUserEntity, getAccessibleEntityIds } from '@/lib/platform-core/multi-tenancy'
+import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
+import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 import type { AssetType } from '@prisma/client'
 
@@ -24,20 +25,10 @@ export async function getAssets() {
     throw new Error('You do not have permission to view assets')
   }
 
-  // Get accessible entity IDs
-  const entityIds = await getAccessibleEntityIds(userId)
+  const entityId = requireSessionEntityId(session)
 
-  if (entityIds.length === 0) {
-    return []
-  }
-
-  // Fetch assets scoped to accessible entities
   const assets = await prisma.companyAsset.findMany({
-    where: {
-      entityId: {
-        in: entityIds,
-      },
-    },
+    where: { entityId },
     orderBy: {
       createdAt: 'desc',
     },
@@ -63,19 +54,11 @@ export async function getVehicles() {
     throw new Error('You do not have permission to view assets')
   }
 
-  // Get accessible entity IDs
-  const entityIds = await getAccessibleEntityIds(userId)
+  const entityId = requireSessionEntityId(session)
 
-  if (entityIds.length === 0) {
-    return []
-  }
-
-  // Fetch only vehicle assets scoped to accessible entities
   const vehicles = await prisma.companyAsset.findMany({
     where: {
-      entityId: {
-        in: entityIds,
-      },
+      entityId,
       type: 'VEHICLE',
     },
     orderBy: {
@@ -113,8 +96,8 @@ export async function getAsset(id: string) {
   }
 
   // Verify user can access this asset's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(asset.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (asset.entityId !== entityId) {
     throw new Error('You do not have permission to access this asset')
   }
 
@@ -205,8 +188,8 @@ export async function updateAsset(
     const existingAsset = await prisma.companyAsset.findUnique({ where: { id } })
     if (!existingAsset) return { success: false, error: 'Asset not found' }
 
-    const entityIds = await getAccessibleEntityIds(userId)
-    if (!entityIds.includes(existingAsset.entityId))
+    const entityId = requireSessionEntityId(session)
+    if (existingAsset.entityId !== entityId)
       return { success: false, error: 'You do not have permission to update this asset' }
 
     const asset = await prisma.companyAsset.update({
@@ -262,8 +245,8 @@ export async function deleteAsset(id: string) {
   }
 
   // Verify user can access this asset's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingAsset.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (existingAsset.entityId !== entityId) {
     throw new Error('You do not have permission to delete this asset')
   }
 

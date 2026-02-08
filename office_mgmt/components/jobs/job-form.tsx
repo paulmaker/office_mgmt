@@ -16,6 +16,7 @@ import type { Job, Client, Employee, Subcontractor, JobStatus, JobLineItem as Pr
 
 interface JobLineItem {
   id?: string
+  address?: string
   description: string
   amount: number
   notes?: string
@@ -88,6 +89,7 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
           subcontractorIds: job.subcontractors?.map(js => js.subcontractor.id) || [],
           lineItems: job.lineItems?.map(li => ({
             id: li.id,
+            address: (li as { address?: string | null }).address ?? '',
             description: li.description,
             amount: li.amount,
             notes: li.notes || '',
@@ -98,7 +100,7 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
       : {
           employeeIds: [],
           subcontractorIds: [],
-          lineItems: [{ description: '', amount: 0, notes: '' }],
+          lineItems: [{ address: '', description: '', amount: 0, notes: '' }],
           status: 'PENDING',
         },
   })
@@ -163,6 +165,7 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
       setValue('lineItems.0.notes', jobPrice.description || '')
     } else {
       append({
+        address: '',
         description: jobPrice.jobType,
         amount: jobPrice.price,
         notes: jobPrice.description || '',
@@ -195,6 +198,7 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
         dateWorkCommenced: new Date(data.dateWorkCommenced),
         subcontractorIds: data.subcontractorIds || [],
         lineItems: data.lineItems.map(item => ({
+          address: item.address?.trim() || undefined,
           description: item.description,
           amount: Number(item.amount),
           notes: item.notes,
@@ -217,7 +221,7 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
   }
 
   const addLineItem = () => {
-    append({ description: '', amount: 0, notes: '' })
+    append({ address: '', description: '', amount: 0, notes: '' })
   }
 
   const removeLineItem = (index: number) => {
@@ -398,6 +402,7 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
+                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Address</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Description</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Amount</th>
                 <th className="px-3 py-2 text-left text-xs font-medium text-gray-500">Notes</th>
@@ -407,6 +412,13 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
             <tbody className="divide-y">
               {fields.map((field, index) => (
                 <tr key={field.id}>
+                  <td className="px-3 py-2">
+                    <Input
+                      {...register(`lineItems.${index}.address` as const)}
+                      placeholder="Line item address"
+                      className="border-0 p-0 h-auto"
+                    />
+                  </td>
                   <td className="px-3 py-2">
                     <Input
                       {...register(`lineItems.${index}.description` as const, {
@@ -453,7 +465,7 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
             </tbody>
             <tfoot className="bg-gray-50 border-t-2">
               <tr>
-                <td colSpan={3} className="px-3 py-2 text-right font-medium">
+                <td colSpan={4} className="px-3 py-2 text-right font-medium">
                   Total:
                 </td>
                 <td className="px-3 py-2 font-bold text-lg">

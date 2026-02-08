@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getAccessibleEntityIds } from '@/lib/platform-core/multi-tenancy'
+import { requireSessionEntityId } from '@/lib/session-entity'
 import { requireModule } from '@/lib/module-access'
 import { formatCurrencyForCSV, formatDate } from '@/lib/utils'
 import { startOfMonth, subMonths, format, endOfMonth } from 'date-fns'
@@ -18,7 +18,7 @@ async function getReportContext() {
   }
 
   const userId = session.user.id as string
-  const entityId = (session.user as any).entityId
+  const entityId = requireSessionEntityId(session)
 
   // Check module access
   await requireModule(entityId, 'reports')
@@ -29,14 +29,7 @@ async function getReportContext() {
     throw new Error('You do not have permission to view reports')
   }
 
-  // Get accessible entity IDs
-  const entityIds = await getAccessibleEntityIds(userId)
-
-  if (entityIds.length === 0) {
-    throw new Error('No accessible entities')
-  }
-
-  return { userId, entityId, entityIds }
+  return { userId, entityId }
 }
 
 /**

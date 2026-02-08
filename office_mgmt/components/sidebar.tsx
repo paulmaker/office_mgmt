@@ -22,6 +22,7 @@ import {
   UserCheck,
   Package,
   DollarSign,
+  Building2,
 } from 'lucide-react'
 
 const navigation = [
@@ -43,18 +44,38 @@ const navigation = [
   { name: 'Settings', href: '/settings', icon: Settings, module: null }, // Core module, always visible
 ]
 
-export function Sidebar() {
+export function Sidebar({ hasMultipleEntities = false }: { hasMultipleEntities?: boolean }) {
   const pathname = usePathname()
   const { data: session } = useSession()
   const userRole = (session?.user as any)?.role
   const enabledModules = (session?.user as any)?.enabledModules || []
   const organizationName = (session?.user as any)?.organizationName || 'Office Manager'
+  const entityName = (session?.user as any)?.entityName
 
   return (
     <div className="flex h-full w-64 flex-col bg-gray-900">
       <div className="flex h-16 items-center px-6">
         <h1 className="text-xl font-bold text-white">{organizationName}</h1>
       </div>
+      {hasMultipleEntities && (
+        <div className="px-3 pb-2">
+          <Link
+            href="/auth/choose-entity"
+            className={cn(
+              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+              pathname === '/auth/choose-entity'
+                ? 'bg-gray-800 text-white'
+                : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+            )}
+          >
+            <Building2 className="h-5 w-5" />
+            <span className="flex flex-col items-start">
+              <span>Switch entity</span>
+              {entityName && <span className="text-xs text-gray-500 font-normal">{entityName}</span>}
+            </span>
+          </Link>
+        </div>
+      )}
       <nav className="flex-1 space-y-1 px-3 py-4">
         {navigation.map((item) => {
           // Hide admin link if user doesn't have admin role

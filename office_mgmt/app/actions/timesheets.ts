@@ -3,7 +3,8 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getUserEntity, getAccessibleEntityIds } from '@/lib/platform-core/multi-tenancy'
+import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
+import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 import { calculateCISDeduction } from '@/lib/utils'
 import type { TimesheetStatus } from '@prisma/client'
@@ -19,7 +20,7 @@ export async function getTimesheets() {
   }
 
   const userId = session.user.id as string
-  const entityId = session.user.entityId
+  const entityId = requireSessionEntityId(session)
 
   // Check module access
   await requireModule(entityId, 'timesheets')
@@ -30,20 +31,8 @@ export async function getTimesheets() {
     throw new Error('You do not have permission to view timesheets')
   }
 
-  // Get accessible entity IDs
-  const entityIds = await getAccessibleEntityIds(userId)
-
-  if (entityIds.length === 0) {
-    return []
-  }
-
-  // Fetch timesheets scoped to accessible entities
   const timesheets = await prisma.timesheet.findMany({
-    where: {
-      entityId: {
-        in: entityIds,
-      },
-    },
+    where: { entityId },
     include: {
       subcontractor: true,
     },
@@ -84,9 +73,8 @@ export async function getTimesheet(id: string) {
     throw new Error('Timesheet not found')
   }
 
-  // Verify user can access this timesheet's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(timesheet.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (timesheet.entityId !== entityId) {
     throw new Error('You do not have permission to access this timesheet')
   }
 
@@ -118,19 +106,14 @@ export async function createTimesheet(data: {
     const canCreate = await hasPermission(userId, 'timesheets', 'create')
     if (!canCreate) return { success: false, error: 'You do not have permission to create timesheets' }
 
-    const userEntity = await getUserEntity(userId)
-    if (!userEntity) return { success: false, error: 'User entity not found' }
-
-    // Get all accessible entity IDs for this user
-    const accessibleEntityIds = await getAccessibleEntityIds(userId)
+    const entityId = requireSessionEntityId(session)
 
     const subcontractor = await prisma.subcontractor.findUnique({ where: { id: data.subcontractorId } })
     if (!subcontractor) return { success: false, error: 'Subcontractor not found' }
-    if (!accessibleEntityIds.includes(subcontractor.entityId))
-      return { success: false, error: 'Subcontractor does not belong to an accessible entity' }
+    if (subcontractor.entityId !== entityId)
+      return { success: false, error: 'Subcontractor does not belong to your entity' }
 
-    // Use subcontractor's entityId for the timesheet
-    const timesheetEntityId = subcontractor.entityId
+    const timesheetEntityId = entityId
 
     const regularAmount = data.hoursWorked * data.rate
     const additionalHours = data.additionalHours || 0
@@ -242,8 +225,8 @@ export async function updateTimesheet(
     })
     if (!existingTimesheet) return { success: false, error: 'Timesheet not found' }
 
-    const entityIds = await getAccessibleEntityIds(userId)
-    if (!entityIds.includes(existingTimesheet.entityId))
+    const entityId = requireSessionEntityId(session)
+    if (existingTimesheet.entityId !== entityId)
       return { success: false, error: 'You do not have permission to update this timesheet' }
 
     // Handle empty string for subcontractorId - use existing if empty/undefined
@@ -330,8 +313,8 @@ export async function approveTimesheet(id: string) {
   }
 
   // Verify user can access this timesheet's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingTimesheet.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (existingTimesheet.entityId !== entityId) {
     throw new Error('You do not have permission to approve this timesheet')
   }
 
@@ -377,8 +360,8 @@ export async function markTimesheetAsPaid(id: string) {
   }
 
   // Verify user can access this timesheet's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingTimesheet.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (existingTimesheet.entityId !== entityId) {
     throw new Error('You do not have permission to mark this timesheet as paid')
   }
 
@@ -428,8 +411,8 @@ export async function rejectTimesheet(id: string, reason?: string) {
   }
 
   // Verify user can access this timesheet's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingTimesheet.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (existingTimesheet.entityId !== entityId) {
     throw new Error('You do not have permission to reject this timesheet')
   }
 
@@ -473,8 +456,8 @@ export async function deleteTimesheet(id: string) {
   }
 
   // Verify user can access this timesheet's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingTimesheet.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (existingTimesheet.entityId !== entityId) {
     throw new Error('You do not have permission to delete this timesheet')
   }
 

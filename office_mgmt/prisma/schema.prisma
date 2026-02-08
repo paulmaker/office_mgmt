@@ -429,6 +429,7 @@ model JobSubcontractor {
 model JobLineItem {
   id          String   @id @default(cuid())
   jobId       String
+  address     String?
   description String
   amount      Float
   notes       String?

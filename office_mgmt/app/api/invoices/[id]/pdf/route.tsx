@@ -3,6 +3,7 @@ import { auth } from "@/app/api/auth/[...nextauth]/route"
 import { NextResponse } from "next/server"
 import { renderToStream } from "@react-pdf/renderer"
 import { InvoicePDF } from "@/lib/invoice-pdf"
+import { requireSessionEntityId } from "@/lib/session-entity"
 
 export async function GET(
   request: Request,
@@ -10,8 +11,15 @@ export async function GET(
 ) {
   try {
     const session = await auth()
-    if (!session?.user?.entityId) {
+    if (!session?.user) {
       return new NextResponse("Unauthorized", { status: 401 })
+    }
+
+    let entityId: string
+    try {
+      entityId = requireSessionEntityId(session)
+    } catch {
+      return new NextResponse("No entity selected", { status: 403 })
     }
 
     const { id } = await params
@@ -28,7 +36,7 @@ export async function GET(
       }
     })
 
-    if (!invoice || invoice.entityId !== session.user.entityId) {
+    if (!invoice || invoice.entityId !== entityId) {
       return new NextResponse("Not found", { status: 404 })
     }
 
@@ -37,10 +45,16 @@ export async function GET(
       <InvoicePDF invoice={invoice} entity={invoice.entity} />
     )
 
+    const url = new URL(request.url)
+    const isPreview = url.searchParams.get("preview") === "1"
+    const contentDisposition = isPreview
+      ? `inline; filename="invoice-${invoice.invoiceNumber}.pdf"`
+      : `attachment; filename="invoice-${invoice.invoiceNumber}.pdf"`
+
     return new NextResponse(stream as unknown as ReadableStream, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="invoice-${invoice.invoiceNumber}.pdf"`,
+        "Content-Disposition": contentDisposition,
       },
     })
   } catch (error) {

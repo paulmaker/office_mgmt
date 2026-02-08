@@ -3,7 +3,8 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getUserEntity, getAccessibleEntityIds } from '@/lib/platform-core/multi-tenancy'
+import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
+import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 import { generateReferenceCode } from '@/lib/utils'
 import { requireModule } from '@/lib/module-access'
@@ -18,7 +19,7 @@ export async function getClients() {
   }
 
   const userId = session.user.id as string
-  const entityId = (session.user as any).entityId
+  const entityId = requireSessionEntityId(session)
 
   // Check module access
   await requireModule(entityId, 'clients')
@@ -29,20 +30,9 @@ export async function getClients() {
     throw new Error('You do not have permission to view clients')
   }
 
-  // Get accessible entity IDs
-  const entityIds = await getAccessibleEntityIds(userId)
-
-  if (entityIds.length === 0) {
-    return []
-  }
-
-  // Fetch clients scoped to accessible entities
+  // Fetch clients scoped to current session entity
   const clients = await prisma.client.findMany({
-    where: {
-      entityId: {
-        in: entityIds,
-      },
-    },
+    where: { entityId },
     orderBy: {
       createdAt: 'desc',
     },
@@ -77,9 +67,8 @@ export async function getClient(id: string) {
     throw new Error('Client not found')
   }
 
-  // Verify user can access this client's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(client.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (client.entityId !== entityId) {
     throw new Error('You do not have permission to access this client')
   }
 
@@ -259,9 +248,8 @@ export async function updateClient(
       return { success: false, error: 'Client not found' }
     }
 
-    // Verify user can access this client's entity
-    const entityIds = await getAccessibleEntityIds(userId)
-    if (!entityIds.includes(existingClient.entityId)) {
+    const entityId = requireSessionEntityId(session)
+    if (existingClient.entityId !== entityId) {
       return { success: false, error: 'You do not have permission to update this client' }
     }
 
@@ -371,9 +359,8 @@ export async function deleteClient(id: string) {
     throw new Error('Client not found')
   }
 
-  // Verify user can access this client's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingClient.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (existingClient.entityId !== entityId) {
     throw new Error('You do not have permission to delete this client')
   }
 

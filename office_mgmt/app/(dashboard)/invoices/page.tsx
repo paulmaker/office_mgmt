@@ -137,6 +137,10 @@ export default function InvoicesPage() {
     }
   }
 
+  const handleViewPdf = (id: string) => {
+    window.open(`/api/invoices/${id}/pdf?preview=1`, '_blank')
+  }
+
   const handleDownload = (id: string) => {
     window.open(`/api/invoices/${id}/pdf`, '_blank')
   }
@@ -414,10 +418,20 @@ export default function InvoicesPage() {
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
                         )}
-                        <Button variant="ghost" size="sm" onClick={() => handleDownload(invoice.id)}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleViewPdf(invoice.id)}
+                          title="View PDF"
+                        >
                           <Eye className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => handleDownload(invoice.id)}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDownload(invoice.id)}
+                          title="Download PDF"
+                        >
                           <Download className="h-4 w-4" />
                         </Button>
                         {invoice.type === 'SALES' && invoice.status !== 'PAID' && (

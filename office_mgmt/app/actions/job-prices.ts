@@ -3,7 +3,7 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getUserEntity, getAccessibleEntityIds } from '@/lib/platform-core/multi-tenancy'
+import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 
 /**
@@ -23,25 +23,14 @@ export async function getJobPrices(clientId?: string) {
     throw new Error('You do not have permission to view job prices')
   }
 
-  // Get accessible entity IDs
-  const entityIds = await getAccessibleEntityIds(userId)
+  const entityId = requireSessionEntityId(session)
 
-  if (entityIds.length === 0) {
-    return []
-  }
-
-  // Build where clause
-  const where: any = {
-    entityId: {
-      in: entityIds,
-    },
-  }
-
+  const where: any = { entityId }
   if (clientId) {
     where.clientId = clientId
   }
 
-  // Fetch job prices scoped to accessible entities
+  // Fetch job prices scoped to current session entity
   const jobPrices = await prisma.jobPrice.findMany({
     where,
     include: {
@@ -84,9 +73,8 @@ export async function getJobPrice(id: string) {
     throw new Error('Job price not found')
   }
 
-  // Verify user can access this job price's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(jobPrice.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (jobPrice.entityId !== entityId) {
     throw new Error('You do not have permission to access this job price')
   }
 
@@ -112,21 +100,16 @@ export async function createJobPrice(data: {
     const canCreate = await hasPermission(userId, 'jobPrices', 'create')
     if (!canCreate) return { success: false, error: 'You do not have permission to create job prices' }
 
-    const userEntity = await getUserEntity(userId)
-    if (!userEntity) return { success: false, error: 'User entity not found' }
-
-    // Get all accessible entity IDs for this user
-    const accessibleEntityIds = await getAccessibleEntityIds(userId)
+    const entityId = requireSessionEntityId(session)
 
     const client = await prisma.client.findUnique({ where: { id: data.clientId } })
     if (!client) return { success: false, error: 'Client not found' }
-    if (!accessibleEntityIds.includes(client.entityId)) 
-      return { success: false, error: 'Client does not belong to an accessible entity' }
+    if (client.entityId !== entityId)
+      return { success: false, error: 'Client does not belong to your entity' }
 
-    // Use client's entityId for the job price
     const jobPrice = await prisma.jobPrice.create({
       data: {
-        entityId: client.entityId,
+        entityId,
         clientId: data.clientId,
         jobType: data.jobType,
         description: data.description,
@@ -169,8 +152,8 @@ export async function updateJobPrice(
     const existingJobPrice = await prisma.jobPrice.findUnique({ where: { id } })
     if (!existingJobPrice) return { success: false, error: 'Job price not found' }
 
-    const entityIds = await getAccessibleEntityIds(userId)
-    if (!entityIds.includes(existingJobPrice.entityId))
+    const entityId = requireSessionEntityId(session)
+    if (existingJobPrice.entityId !== entityId)
       return { success: false, error: 'You do not have permission to update this job price' }
 
     // Convert empty string to undefined for clientId (don't update if empty)
@@ -224,8 +207,8 @@ export async function deleteJobPrice(id: string) {
   }
 
   // Verify user can access this job price's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingJobPrice.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (existingJobPrice.entityId !== entityId) {
     throw new Error('You do not have permission to delete this job price')
   }
 

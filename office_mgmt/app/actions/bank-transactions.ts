@@ -3,7 +3,8 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getUserEntity, getAccessibleEntityIds } from '@/lib/platform-core/multi-tenancy'
+import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
+import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 import type { TransactionType } from '@prisma/client'
 import { requireModule } from '@/lib/module-access'
@@ -23,7 +24,7 @@ export async function getBankTransactions(filters?: {
   }
 
   const userId = session.user.id as string
-  const entityId = (session.user as any).entityId
+  const entityId = requireSessionEntityId(session)
 
   // Check module access
   await requireModule(entityId, 'banking')
@@ -34,19 +35,7 @@ export async function getBankTransactions(filters?: {
     throw new Error('You do not have permission to view bank transactions')
   }
 
-  // Get accessible entity IDs
-  const entityIds = await getAccessibleEntityIds(userId)
-
-  if (entityIds.length === 0) {
-    return []
-  }
-
-  // Build where clause
-  const where: any = {
-    entityId: {
-      in: entityIds,
-    },
-  }
+  const where: any = { entityId }
 
   if (filters?.reconciled !== undefined) {
     where.reconciled = filters.reconciled
@@ -121,8 +110,8 @@ export async function getBankTransaction(id: string) {
   }
 
   // Verify user can access this transaction's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(transaction.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (transaction.entityId !== entityId) {
     throw new Error('You do not have permission to access this transaction')
   }
 
@@ -261,8 +250,8 @@ export async function updateBankTransaction(
   }
 
   // Verify user can access this transaction's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingTransaction.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (existingTransaction.entityId !== entityId) {
     throw new Error('You do not have permission to update this transaction')
   }
 
@@ -306,8 +295,8 @@ export async function reconcileTransaction(
     const existingTransaction = await prisma.bankTransaction.findUnique({ where: { id } })
     if (!existingTransaction) return { success: false, error: 'Transaction not found' }
 
-    const entityIds = await getAccessibleEntityIds(userId)
-    if (!entityIds.includes(existingTransaction.entityId))
+    const entityId = requireSessionEntityId(session)
+    if (existingTransaction.entityId !== entityId)
       return { success: false, error: 'You do not have permission to reconcile this transaction' }
 
     // Convert empty strings to null for foreign keys
@@ -375,8 +364,8 @@ export async function unreconcileTransaction(id: string) {
   }
 
   // Verify user can access this transaction's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingTransaction.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (existingTransaction.entityId !== entityId) {
     throw new Error('You do not have permission to unreconcile this transaction')
   }
 
@@ -423,8 +412,8 @@ export async function deleteBankTransaction(id: string) {
   }
 
   // Verify user can access this transaction's entity
-  const entityIds = await getAccessibleEntityIds(userId)
-  if (!entityIds.includes(existingTransaction.entityId)) {
+  const entityId = requireSessionEntityId(session)
+  if (existingTransaction.entityId !== entityId) {
     throw new Error('You do not have permission to delete this transaction')
   }
 

@@ -1,6 +1,8 @@
 import { Sidebar } from '@/components/sidebar'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
+import { getAccessibleEntities } from '@/app/actions/entity'
 
 export default async function DashboardLayout({
   children,
@@ -13,6 +15,17 @@ export default async function DashboardLayout({
     redirect('/login')
   }
 
+  const entities = await getAccessibleEntities()
+  const hasMultipleEntities = entities.length > 1
+
+  if (hasMultipleEntities) {
+    const cookieStore = await cookies()
+    const hasChosenEntity = cookieStore.get('entity_selection_done')
+    if (!hasChosenEntity) {
+      redirect('/auth/choose-entity')
+    }
+  }
+
   // Module access is enforced by:
   // 1. Server actions (requireModule checks) - primary enforcement
   // 2. Sidebar filtering (UI level) - prevents navigation to disabled modules
@@ -20,7 +33,7 @@ export default async function DashboardLayout({
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
-      <Sidebar />
+      <Sidebar hasMultipleEntities={hasMultipleEntities} />
       <main className="flex-1 overflow-y-auto">
         <div className="container mx-auto p-6 max-w-7xl">
           {children}

@@ -3,7 +3,7 @@ import { PrismaAdapter } from "@auth/prisma-adapter"
 import { prisma } from "@/lib/prisma"
 import CredentialsProvider from "next-auth/providers/credentials"
 import { getUserPermissions } from "@/lib/platform-core/rbac"
-import { getUserEntity } from "@/lib/platform-core/multi-tenancy"
+import { getUserEntity, getAccessibleEntityIds } from "@/lib/platform-core/multi-tenancy"
 import { compare } from "bcryptjs"
 import { getEnabledModules, getAllModuleKeys, type ModuleKey } from "@/lib/module-access"
 
@@ -17,75 +17,36 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" }
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          return null
-        }
+        if (!credentials?.email || !credentials?.password) return null
 
-        try {
-          const user = await prisma.user.findUnique({
-            where: { email: credentials.email as string },
-            include: {
-              entity: {
-                include: {
-                  tenantAccount: {
-                    select: {
-                      id: true,
-                      name: true,
-                    },
-                  },
-                },
+        const email = (credentials.email as string).trim()
+        const password = (credentials.password as string).trim()
+
+        const user = await prisma.user.findUnique({
+          where: { email },
+          include: {
+            entity: {
+              include: {
+                tenantAccount: { select: { name: true } },
               },
             },
-          })
+          },
+        })
 
-          if (!user || !user.isActive || !user.entity) {
-            return null
-          }
+        if (!user || !user.isActive || !user.entity || !user.password) return null
 
-          // If user has a password set, verify it
-          if (user.password) {
-            const isValid = await compare(credentials.password as string, user.password)
-            if (!isValid) {
-              return null
-            }
-          } else {
-            // User has no password set (legacy or invited)
-            // For security, we should NOT allow login without password
-            // They must use the "Forgot Password" / Invite flow to set one
-            // However, for migration, if we want to allow the "empty" password trick for dev:
-            // if (credentials.password === "dev-bypass") return user // Example
-            
-            // Strict mode:
-            return null
-          }
-          
-          // Load enabled modules from entity settings
-          let enabledModules: ModuleKey[] = []
-          try {
-            const enabledModulesSet = await getEnabledModules(user.entityId)
-            enabledModules = Array.from(enabledModulesSet)
-          } catch (error) {
-            console.error('[AUTH] Error loading enabled modules:', error)
-            // Fallback to all modules if there's an error
-            enabledModules = getAllModuleKeys()
-          }
+        const isValid = await compare(password, user.password)
+        if (!isValid) return null
 
-          return {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user.role,
-            entityId: user.entityId,
-            entityName: user.entity.name,
-            organizationName: user.entity?.tenantAccount?.name,
-            accountId: user.entity?.tenantAccountId,
-            enabledModules,
-          }
-        } catch (error) {
-          console.error('[AUTH] Error during authorization:', error)
-          // Return null instead of throwing to prevent server errors
-          // This will show "Invalid email or password" to the user
-          return null
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name ?? undefined,
+          role: user.role,
+          entityId: user.entityId,
+          entityName: user.entity.name,
+          organizationName: user.entity.tenantAccount?.name ?? undefined,
+          accountId: user.entity.tenantAccountId ?? undefined,
         }
       }
     })
@@ -97,7 +58,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     strategy: "jwt",
   },
   callbacks: {
-    async jwt({ token, user, trigger }) {
+    async signIn() {
+      return true
+    },
+    async jwt({ token, user, trigger, session }) {
       // Initial sign in
       if (user) {
         try {
@@ -106,21 +70,52 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           token.entityName = (user as any).entityName
           token.organizationName = (user as any).organizationName
           token.accountId = (user as any).accountId
-          token.enabledModules = (user as any).enabledModules || getAllModuleKeys()
-          
-          // Load permissions and cache in JWT
+          try {
+            const enabledModulesSet = await getEnabledModules((user as any).entityId)
+            token.enabledModules = Array.from(enabledModulesSet)
+          } catch {
+            token.enabledModules = getAllModuleKeys()
+          }
           if (user.id) {
             const permissions = await getUserPermissions(user.id)
             token.permissions = permissions
           }
         } catch (error) {
           console.error('[AUTH] JWT callback error:', error)
-          // Don't fail the login if permissions fail to load
         }
       }
       
+      // Session update: user chose a different entity (entity switcher)
+      if (trigger === "update" && session?.entityId && token.sub) {
+        try {
+          const entityIds = await getAccessibleEntityIds(token.sub as string)
+          if (entityIds.includes(session.entityId)) {
+            const entity = await prisma.entity.findUnique({
+              where: { id: session.entityId },
+              include: {
+                tenantAccount: { select: { name: true } }
+              }
+            })
+            if (entity) {
+              token.entityId = entity.id
+              token.entityName = entity.name
+              token.organizationName = entity.tenantAccount?.name ?? undefined
+              token.accountId = entity.tenantAccountId ?? undefined
+              try {
+                const enabledModulesSet = await getEnabledModules(entity.id)
+                token.enabledModules = Array.from(enabledModulesSet)
+              } catch (err) {
+                console.error('[AUTH] Error refreshing enabled modules:', err)
+              }
+            }
+          }
+        } catch (err) {
+          console.error('[AUTH] Error updating session entity:', err)
+        }
+      }
+
       // If role changed (via trigger), refresh permissions and modules
-      if (trigger === "update" && token.sub) {
+      if (trigger === "update" && token.sub && !session?.entityId) {
         const updatedUser = await prisma.user.findUnique({
           where: { id: token.sub as string },
           include: {
