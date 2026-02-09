@@ -46,6 +46,7 @@ interface InvoiceFormData {
   cisDeduction: number
   cisRate: number
   status: InvoiceStatus
+  paymentDate?: string
   documentUrl?: string
   notes?: string
 }
@@ -73,6 +74,7 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
     control,
     watch,
     setValue,
+    getValues,
     formState: { errors },
   } = useForm<InvoiceFormData>({
     defaultValues: invoice
@@ -97,6 +99,9 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
           cisDeduction: invoice.cisDeduction,
           cisRate: invoice.cisRate,
           status: invoice.status,
+          paymentDate: (invoice as any).paymentDate
+            ? new Date((invoice as any).paymentDate).toISOString().split('T')[0]
+            : undefined,
           documentUrl: (invoice as any).documentUrl || undefined,
           notes: invoice.notes || '',
         }
@@ -114,10 +119,20 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
         },
   })
 
+  const status = watch('status')
+  const isPaid = status === 'PAID'
+
   const { fields, append, remove } = useFieldArray({
     control,
     name: 'lineItems',
   })
+
+  // When user changes status to Paid, set payment date to today if empty
+  useEffect(() => {
+    if (isPaid && !getValues('paymentDate')) {
+      setValue('paymentDate', new Date().toISOString().split('T')[0])
+    }
+  }, [isPaid, setValue, getValues])
 
   const invoiceType = watch('type')
   const selectedClientId = watch('clientId')
@@ -253,6 +268,7 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
         dueDate: new Date(data.dueDate),
         sentDate: data.sentDate ? new Date(data.sentDate) : undefined,
         receivedDate: data.receivedDate ? new Date(data.receivedDate) : undefined,
+        paymentDate: data.status === 'PAID' && data.paymentDate ? new Date(data.paymentDate) : undefined,
         discountAmount: discount,
         documentUrl: data.documentUrl,
         lineItems: data.lineItems.map(item => ({
@@ -342,7 +358,8 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
               <option value="">Select a client</option>
               {clients.map((client) => (
                 <option key={client.id} value={client.id}>
-                  {client.companyName || client.name}
+                  {client.name}
+                  {client.companyName ? ` (${client.companyName})` : ''}
                 </option>
               ))}
             </select>
@@ -801,6 +818,17 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
             <option value="CANCELLED">Cancelled</option>
           </select>
         </div>
+        {isPaid && (
+          <div className="space-y-2">
+            <Label htmlFor="paymentDate">Paid Date</Label>
+            <Input
+              id="paymentDate"
+              type="date"
+              {...register('paymentDate')}
+              className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+            />
+          </div>
+        )}
       </div>
 
       <div className="space-y-2">

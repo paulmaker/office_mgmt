@@ -297,6 +297,7 @@ export async function updateInvoice(
     purchaseOrderNumber?: string
     documentUrl?: string
     status?: InvoiceStatus
+    paymentDate?: Date
     notes?: string
   }
 ) {
@@ -342,7 +343,10 @@ export async function updateInvoice(
   // Calculate total
   const cisDeduction = data.cisDeduction ?? existingInvoice.cisDeduction
   const total = subtotal + vatAmount - cisDeduction
-  const outstandingAmount = total - existingInvoice.paidAmount
+  const newStatus = data.status ?? existingInvoice.status
+  const isPaid = newStatus === 'PAID'
+  const paidAmount = isPaid ? total : existingInvoice.paidAmount
+  const outstandingAmount = isPaid ? 0 : total - paidAmount
 
   // Convert empty strings to null for foreign keys (undefined means don't update)
   const clientId = data.clientId === '' ? null : data.clientId
@@ -362,6 +366,7 @@ export async function updateInvoice(
       dueDate: data.dueDate,
       sentDate: data.sentDate,
       receivedDate: data.receivedDate,
+      ...(data.paymentDate != null && { paymentDate: data.paymentDate }),
       subtotal,
       discountAmount: discount,
       discountPercentage: data.discountPercentage,
@@ -372,6 +377,7 @@ export async function updateInvoice(
       cisDeduction,
       cisRate: data.cisRate,
       total,
+      paidAmount,
       outstandingAmount,
       purchaseOrderNumber: data.purchaseOrderNumber,
       description: data.description,

@@ -53,6 +53,7 @@ type InvoiceWithRelations = Invoice & {
   paidAmount?: number | null
   outstandingAmount?: number | null
   paymentReference?: string | null
+  paymentDate?: Date | null
 }
 
 export default function InvoicesPage() {
@@ -377,6 +378,9 @@ export default function InvoicesPage() {
                         )}
                         {invoice.type === 'PURCHASE' && (invoice as any).receivedDate && (
                           <div className="text-xs">Received: {formatDate((invoice as any).receivedDate)}</div>
+                        )}
+                        {invoice.status === 'PAID' && (invoice as any).paymentDate && (
+                          <div className="text-xs text-green-600">Paid: {formatDate((invoice as any).paymentDate)}</div>
                         )}
                       </TableCell>
                       <TableCell className="text-gray-500">{formatDate(invoice.dueDate)}</TableCell>
