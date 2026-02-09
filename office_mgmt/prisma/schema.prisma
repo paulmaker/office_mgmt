@@ -241,7 +241,8 @@ model Timesheet {
   rateType            TimesheetRateType   @default(HOURLY)
   hoursWorked         Float
   daysWorked          Float?
-  rate                Float
+  rate                Float               // hourly rate (£/hr)
+  dailyRate           Float?              // daily rate (£/day), for mixed weekly invoices
   grossAmount         Float
   cisDeduction        Float               @default(0)
   netAmount           Float

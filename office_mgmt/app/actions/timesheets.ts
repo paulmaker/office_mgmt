@@ -4,12 +4,13 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
 import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 import { calculateCISDeduction } from '@/lib/utils'
-import type { TimesheetStatus, TimesheetRateType } from '@prisma/client'
+import type { TimesheetStatus } from '@prisma/client'
 import { requireModule } from '@/lib/module-access'
+
+type TimesheetRateType = 'HOURLY' | 'DAILY'
 
 /**
  * Get all timesheets for the current user's accessible entities
@@ -83,18 +84,21 @@ export async function getTimesheet(id: string) {
 }
 
 /**
- * Create a new timesheet
+ * Compute regular (hourly + daily) amount. Supports both in one timesheet:
+ * - Hourly: hoursWorked * rate (when rateType is HOURLY or when using both)
+ * - Daily: daysWorked * (dailyRate ?? rate when rateType is DAILY for legacy)
  */
 function computeRegularAmount(
   rateType: TimesheetRateType,
   rate: number,
   hoursWorked: number,
-  daysWorked: number | null | undefined
+  daysWorked: number | null | undefined,
+  dailyRate: number | null | undefined
 ): number {
-  if (rateType === 'DAILY' && daysWorked != null) {
-    return daysWorked * rate
-  }
-  return hoursWorked * rate
+  const hourlyPart = rateType === 'DAILY' ? 0 : (Number(hoursWorked) || 0) * (Number(rate) || 0)
+  const dailyRateValue = dailyRate ?? (rateType === 'DAILY' ? rate : 0)
+  const dailyPart = (Number(daysWorked) || 0) * (Number(dailyRateValue) || 0)
+  return hourlyPart + dailyPart
 }
 
 export async function createTimesheet(data: {
@@ -105,6 +109,7 @@ export async function createTimesheet(data: {
   hoursWorked: number
   daysWorked?: number | null
   rate: number
+  dailyRate?: number | null
   additionalHours?: number
   additionalHoursRate?: number
   expenses?: number
@@ -131,8 +136,14 @@ export async function createTimesheet(data: {
 
     const timesheetEntityId = entityId
     const rateType = data.rateType ?? 'HOURLY'
-    const regularAmount = computeRegularAmount(rateType, data.rate, data.hoursWorked, data.daysWorked)
-    const additionalHours = data.additionalHours || 0
+    const regularAmount = computeRegularAmount(
+      rateType,
+      data.rate,
+      data.hoursWorked,
+      data.daysWorked,
+      data.dailyRate
+    )
+    const additionalHours = Number(data.additionalHours) || 0
     const additionalHoursRate = data.additionalHoursRate || 0
     const additionalAmount = additionalHours * additionalHoursRate
     const grossAmount = regularAmount + additionalAmount
@@ -140,30 +151,32 @@ export async function createTimesheet(data: {
     const expenses = data.expenses || 0
     const netAmount = grossAmount - cisDeduction + expenses
 
+    const createData = {
+      entityId: timesheetEntityId,
+      subcontractorId: data.subcontractorId,
+      periodStart: data.periodStart,
+      periodEnd: data.periodEnd,
+      rateType,
+      hoursWorked: data.hoursWorked,
+      daysWorked: data.daysWorked ?? undefined,
+      rate: data.rate,
+      dailyRate: data.dailyRate ?? undefined,
+      additionalHours,
+      additionalHoursRate,
+      grossAmount,
+      cisDeduction,
+      expenses,
+      netAmount,
+      receiptsReceived: data.receiptsReceived || false,
+      receiptDocumentKeys: data.receiptDocumentKeys && data.receiptDocumentKeys.length > 0 ? data.receiptDocumentKeys : undefined,
+      submittedDate: data.submittedDate,
+      submittedVia: data.submittedVia || 'MANUAL',
+      status: 'SUBMITTED' as const,
+      notes: data.notes,
+    }
     try {
       const timesheet = await prisma.timesheet.create({
-        data: {
-          entityId: timesheetEntityId,
-          subcontractorId: data.subcontractorId,
-          periodStart: data.periodStart,
-          periodEnd: data.periodEnd,
-          rateType,
-          hoursWorked: data.hoursWorked,
-          daysWorked: data.daysWorked ?? undefined,
-          rate: data.rate,
-          additionalHours,
-          additionalHoursRate,
-          grossAmount,
-          cisDeduction,
-          expenses,
-          netAmount,
-          receiptsReceived: data.receiptsReceived || false,
-          receiptDocumentKeys: data.receiptDocumentKeys && data.receiptDocumentKeys.length > 0 ? data.receiptDocumentKeys : undefined,
-          submittedDate: data.submittedDate,
-          submittedVia: data.submittedVia || 'MANUAL',
-          status: 'SUBMITTED',
-          notes: data.notes,
-        },
+        data: createData as Prisma.TimesheetUncheckedCreateInput,
         include: { subcontractor: true },
       })
       revalidatePath('/timesheets')
@@ -179,27 +192,9 @@ export async function createTimesheet(data: {
         errorCode === 'P2010' ||
         errorCode === '42703'
       ) {
+        const { additionalHours: _ah, additionalHoursRate: _ahr, ...fallbackData } = createData
         const timesheet = await prisma.timesheet.create({
-          data: {
-            entityId: timesheetEntityId,
-            subcontractorId: data.subcontractorId,
-            periodStart: data.periodStart,
-            periodEnd: data.periodEnd,
-            rateType,
-            hoursWorked: data.hoursWorked,
-            daysWorked: data.daysWorked ?? undefined,
-            rate: data.rate,
-            grossAmount,
-            cisDeduction,
-            expenses,
-            netAmount,
-            receiptsReceived: data.receiptsReceived || false,
-            receiptDocumentKeys: data.receiptDocumentKeys && data.receiptDocumentKeys.length > 0 ? data.receiptDocumentKeys : undefined,
-            submittedDate: data.submittedDate,
-            submittedVia: data.submittedVia || 'MANUAL',
-            status: 'SUBMITTED',
-            notes: data.notes,
-          },
+          data: fallbackData as Prisma.TimesheetUncheckedCreateInput,
           include: { subcontractor: true },
         })
         revalidatePath('/timesheets')
@@ -225,6 +220,7 @@ export async function updateTimesheet(
     hoursWorked?: number
     daysWorked?: number | null
     rate?: number
+    dailyRate?: number | null
     additionalHours?: number
     additionalHoursRate?: number
     expenses?: number
@@ -260,13 +256,21 @@ export async function updateTimesheet(
     const subcontractor = await prisma.subcontractor.findUnique({ where: { id: subcontractorId } })
     if (!subcontractor) return { success: false, error: 'Subcontractor not found' }
 
-    const rateType = data.rateType ?? existingTimesheet.rateType
+    const existing = existingTimesheet as typeof existingTimesheet & {
+      rateType?: TimesheetRateType
+      daysWorked?: number | null
+      dailyRate?: number | null
+      additionalHours?: number
+      additionalHoursRate?: number
+    }
+    const rateType = data.rateType ?? existing.rateType ?? 'HOURLY'
     const hoursWorked = data.hoursWorked ?? existingTimesheet.hoursWorked
-    const daysWorked = data.daysWorked !== undefined ? data.daysWorked : existingTimesheet.daysWorked
+    const daysWorked = data.daysWorked !== undefined ? data.daysWorked : existing.daysWorked
     const rate = data.rate ?? existingTimesheet.rate
-    const additionalHours = data.additionalHours ?? existingTimesheet.additionalHours ?? 0
-    const additionalHoursRate = data.additionalHoursRate ?? existingTimesheet.additionalHoursRate ?? 0
-    const regularAmount = computeRegularAmount(rateType, rate, hoursWorked, daysWorked)
+    const dailyRate = data.dailyRate !== undefined ? data.dailyRate : existing.dailyRate
+    const additionalHours = data.additionalHours ?? existing.additionalHours ?? 0
+    const additionalHoursRate = data.additionalHoursRate ?? existing.additionalHoursRate ?? 0
+    const regularAmount = computeRegularAmount(rateType, rate, hoursWorked, daysWorked, dailyRate)
     const additionalAmount = additionalHours * additionalHoursRate
     const grossAmount = regularAmount + additionalAmount
     const cisDeduction = calculateCISDeduction(grossAmount, subcontractor.cisStatus)
@@ -277,31 +281,33 @@ export async function updateTimesheet(
       ? data.subcontractorId
       : undefined
 
+    const updateData = {
+      subcontractorId: updateSubcontractorId,
+      periodStart: data.periodStart,
+      periodEnd: data.periodEnd,
+      rateType,
+      hoursWorked,
+      daysWorked: daysWorked ?? undefined,
+      rate,
+      dailyRate: dailyRate ?? undefined,
+      additionalHours,
+      additionalHoursRate,
+      grossAmount,
+      cisDeduction,
+      expenses,
+      netAmount,
+      receiptsReceived: data.receiptsReceived,
+      receiptDocumentKeys: data.receiptDocumentKeys !== undefined
+        ? (data.receiptDocumentKeys && data.receiptDocumentKeys.length > 0 ? data.receiptDocumentKeys : Prisma.JsonNull)
+        : undefined,
+      submittedDate: data.submittedDate,
+      submittedVia: data.submittedVia,
+      status: data.status,
+      notes: data.notes,
+    }
     const timesheet = await prisma.timesheet.update({
       where: { id },
-      data: {
-        subcontractorId: updateSubcontractorId,
-        periodStart: data.periodStart,
-        periodEnd: data.periodEnd,
-        rateType,
-        hoursWorked,
-        daysWorked: daysWorked ?? undefined,
-        rate,
-        additionalHours,
-        additionalHoursRate,
-        grossAmount,
-        cisDeduction,
-        expenses,
-        netAmount,
-        receiptsReceived: data.receiptsReceived,
-        receiptDocumentKeys: data.receiptDocumentKeys !== undefined
-          ? (data.receiptDocumentKeys && data.receiptDocumentKeys.length > 0 ? data.receiptDocumentKeys : Prisma.JsonNull)
-          : undefined,
-        submittedDate: data.submittedDate,
-        submittedVia: data.submittedVia,
-        status: data.status,
-        notes: data.notes,
-      },
+      data: updateData as Prisma.TimesheetUncheckedUpdateInput,
       include: {
         subcontractor: true,
       },

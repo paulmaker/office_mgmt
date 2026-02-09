@@ -19,6 +19,7 @@ interface TimesheetFormData {
   hoursWorked: number
   daysWorked: number
   rate: number
+  dailyRate: number
   additionalHours: number
   additionalHoursRate: number
   expenses: number
@@ -26,6 +27,12 @@ interface TimesheetFormData {
   submittedDate?: string
   submittedVia: string
   notes?: string
+}
+
+function toNum(v: unknown): number {
+  if (typeof v === 'number' && !Number.isNaN(v)) return v
+  const n = Number(v)
+  return Number.isFinite(n) ? n : 0
 }
 
 interface TimesheetFormProps {
@@ -40,8 +47,9 @@ export function TimesheetForm({ timesheet, onSuccess, onCancel }: TimesheetFormP
   const [subcontractors, setSubcontractors] = useState<Subcontractor[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [receiptDocumentKeys, setReceiptDocumentKeys] = useState<string[]>(() => {
-    const raw = (timesheet as any)?.receiptDocumentKeys
-    return Array.isArray(raw) ? raw : []
+    const raw = (timesheet as Timesheet & { receiptDocumentKeys?: unknown })?.receiptDocumentKeys
+    if (!Array.isArray(raw)) return []
+    return raw.filter((x): x is string => typeof x === 'string')
   })
 
   const {
@@ -55,13 +63,14 @@ export function TimesheetForm({ timesheet, onSuccess, onCancel }: TimesheetFormP
           subcontractorId: timesheet.subcontractorId,
           periodStart: timesheet.periodStart.toISOString().split('T')[0],
           periodEnd: timesheet.periodEnd.toISOString().split('T')[0],
-          rateType: (timesheet as any).rateType || 'HOURLY',
-          hoursWorked: timesheet.hoursWorked,
-          daysWorked: (timesheet as any).daysWorked ?? 0,
-          rate: timesheet.rate,
-          additionalHours: (timesheet as any).additionalHours || 0,
-          additionalHoursRate: (timesheet as any).additionalHoursRate || 0,
-          expenses: timesheet.expenses || 0,
+          rateType: (timesheet as Timesheet & { rateType?: TimesheetRateType }).rateType || 'HOURLY',
+          hoursWorked: timesheet.hoursWorked ?? 0,
+          daysWorked: (timesheet as Timesheet & { daysWorked?: number | null }).daysWorked ?? 0,
+          rate: timesheet.rate ?? 0,
+          dailyRate: (timesheet as Timesheet & { dailyRate?: number | null }).dailyRate ?? ((timesheet as Timesheet & { rateType?: string }).rateType === 'DAILY' ? timesheet.rate : 0),
+          additionalHours: (timesheet as Timesheet & { additionalHours?: number }).additionalHours ?? 0,
+          additionalHoursRate: (timesheet as Timesheet & { additionalHoursRate?: number }).additionalHoursRate ?? 0,
+          expenses: timesheet.expenses ?? 0,
           receiptsReceived: timesheet.receiptsReceived || false,
           submittedDate: timesheet.submittedDate?.toISOString().split('T')[0],
           submittedVia: timesheet.submittedVia || 'MANUAL',
@@ -69,7 +78,10 @@ export function TimesheetForm({ timesheet, onSuccess, onCancel }: TimesheetFormP
         }
       : {
           rateType: 'HOURLY',
+          hoursWorked: 0,
           daysWorked: 0,
+          rate: 0,
+          dailyRate: 0,
           additionalHours: 0,
           additionalHoursRate: 0,
           expenses: 0,
@@ -79,13 +91,16 @@ export function TimesheetForm({ timesheet, onSuccess, onCancel }: TimesheetFormP
   })
 
   const rateType = watch('rateType') || 'HOURLY'
-  const hoursWorked = watch('hoursWorked') ?? 0
-  const daysWorked = watch('daysWorked') ?? 0
-  const rate = watch('rate') ?? 0
-  const additionalHours = watch('additionalHours') ?? 0
-  const additionalHoursRate = watch('additionalHoursRate') ?? 0
-  const expenses = watch('expenses') ?? 0
-  const regularAmount = rateType === 'DAILY' ? daysWorked * rate : hoursWorked * rate
+  const hoursWorked = toNum(watch('hoursWorked'))
+  const daysWorked = toNum(watch('daysWorked'))
+  const rate = toNum(watch('rate'))
+  const dailyRate = toNum(watch('dailyRate'))
+  const additionalHours = toNum(watch('additionalHours'))
+  const additionalHoursRate = toNum(watch('additionalHoursRate'))
+  const expenses = toNum(watch('expenses'))
+  const hourlyAmount = rateType === 'DAILY' ? 0 : hoursWorked * rate
+  const dailyAmount = daysWorked * (dailyRate || (rateType === 'DAILY' ? rate : 0))
+  const regularAmount = hourlyAmount + dailyAmount
   const additionalAmount = additionalHours * additionalHoursRate
   const grossAmount = regularAmount + additionalAmount
   // Note: CIS calculation would need subcontractor CIS status, shown as estimate
@@ -117,12 +132,14 @@ export function TimesheetForm({ timesheet, onSuccess, onCancel }: TimesheetFormP
         periodStart: new Date(data.periodStart),
         periodEnd: new Date(data.periodEnd),
         submittedDate: data.submittedDate ? new Date(data.submittedDate) : undefined,
-        rateType: data.rateType,
-        hoursWorked: Number(data.hoursWorked) || 0,
-        daysWorked: data.rateType === 'DAILY' ? Number(data.daysWorked) || 0 : null,
-        expenses: Number(data.expenses),
-        additionalHours: Number(data.additionalHours) || 0,
-        additionalHoursRate: Number(data.additionalHoursRate) || 0,
+        rateType: 'HOURLY' as const, // always HOURLY so server uses rate=hourly, dailyRate=daily (both lines)
+        hoursWorked: toNum(data.hoursWorked),
+        daysWorked: toNum(data.daysWorked) || null,
+        rate: toNum(data.rate),
+        dailyRate: toNum(data.dailyRate) || null,
+        expenses: toNum(data.expenses),
+        additionalHours: toNum(data.additionalHours),
+        additionalHoursRate: toNum(data.additionalHoursRate),
         receiptDocumentKeys: receiptDocumentKeys.length > 0 ? receiptDocumentKeys : null,
       }
 
@@ -204,98 +221,72 @@ export function TimesheetForm({ timesheet, onSuccess, onCancel }: TimesheetFormP
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="rateType">Rate type</Label>
-        <select
-          id="rateType"
-          {...register('rateType')}
-          className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
-        >
-          <option value="HOURLY">Hourly</option>
-          <option value="DAILY">Daily</option>
-        </select>
+      <div className="space-y-3">
+        <Label className="text-sm font-medium">Hourly</Label>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="hoursWorked">Hours worked</Label>
+            <Input
+              id="hoursWorked"
+              type="number"
+              step="0.5"
+              min={0}
+              {...register('hoursWorked', { valueAsNumber: true, min: 0 })}
+              placeholder="0"
+            />
+            {errors.hoursWorked && (
+              <p className="text-sm text-red-500">{errors.hoursWorked.message}</p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="rate">Rate per hour (£)</Label>
+            <Input
+              id="rate"
+              type="number"
+              step="0.01"
+              min={0}
+              {...register('rate', { valueAsNumber: true, min: 0 })}
+              placeholder="0"
+            />
+            {errors.rate && (
+              <p className="text-sm text-red-500">{errors.rate.message}</p>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        {rateType === 'HOURLY' ? (
-          <>
-            <div className="space-y-2">
-              <Label htmlFor="hoursWorked">
-                Hours Worked <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="hoursWorked"
-                type="number"
-                step="0.5"
-                {...register('hoursWorked', {
-                  required: rateType === 'HOURLY' ? 'Hours worked is required' : false,
-                  valueAsNumber: true,
-                  min: { value: 0, message: 'Must be 0 or greater' },
-                })}
-              />
-              {errors.hoursWorked && (
-                <p className="text-sm text-red-500">{errors.hoursWorked.message}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="rate">
-                Rate per Hour (£) <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="rate"
-                type="number"
-                step="0.01"
-                {...register('rate', {
-                  required: 'Rate is required',
-                  valueAsNumber: true,
-                  min: { value: 0, message: 'Must be 0 or greater' },
-                })}
-              />
-              {errors.rate && (
-                <p className="text-sm text-red-500">{errors.rate.message}</p>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="space-y-2">
-              <Label htmlFor="daysWorked">
-                Days Worked <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="daysWorked"
-                type="number"
-                step="0.5"
-                {...register('daysWorked', {
-                  required: rateType === 'DAILY' ? 'Days worked is required' : false,
-                  valueAsNumber: true,
-                  min: { value: 0, message: 'Must be 0 or greater' },
-                })}
-              />
-              {errors.daysWorked && (
-                <p className="text-sm text-red-500">{errors.daysWorked.message}</p>
-              )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="rate">
-                Rate per Day (£) <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                id="rate"
-                type="number"
-                step="0.01"
-                {...register('rate', {
-                  required: 'Rate is required',
-                  valueAsNumber: true,
-                  min: { value: 0, message: 'Must be 0 or greater' },
-                })}
-              />
-              {errors.rate && (
-                <p className="text-sm text-red-500">{errors.rate.message}</p>
-              )}
-            </div>
-          </>
-        )}
+      <div className="space-y-3">
+        <Label className="text-sm font-medium">Daily</Label>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="daysWorked">Days worked</Label>
+            <Input
+              id="daysWorked"
+              type="number"
+              step="0.5"
+              min={0}
+              {...register('daysWorked', { valueAsNumber: true, min: 0 })}
+              placeholder="0"
+            />
+            {errors.daysWorked && (
+              <p className="text-sm text-red-500">{errors.daysWorked.message}</p>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="dailyRate">Rate per day (£)</Label>
+            <Input
+              id="dailyRate"
+              type="number"
+              step="0.01"
+              min={0}
+              {...register('dailyRate', { valueAsNumber: true, min: 0 })}
+              placeholder="0"
+            />
+            {errors.dailyRate && (
+              <p className="text-sm text-red-500">{errors.dailyRate.message}</p>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-4">
@@ -396,15 +387,19 @@ export function TimesheetForm({ timesheet, onSuccess, onCancel }: TimesheetFormP
 
       {/* Calculation Summary */}
       <div className="bg-gray-50 p-4 rounded-lg space-y-2">
-        <div className="flex justify-between text-sm text-gray-600">
-          <span>
-            {rateType === 'DAILY'
-              ? `Daily (${daysWorked} days × ${formatCurrency(rate)}/day):`
-              : `Regular Hours (${hoursWorked} × ${formatCurrency(rate)}/hr):`}
-          </span>
-          <span>{formatCurrency(regularAmount)}</span>
-        </div>
-        {additionalHours > 0 && additionalHoursRate > 0 && (
+        {hourlyAmount > 0 && (
+          <div className="flex justify-between text-sm text-gray-600">
+            <span>Hourly ({hoursWorked} × {formatCurrency(rate)}/hr):</span>
+            <span>{formatCurrency(hourlyAmount)}</span>
+          </div>
+        )}
+        {dailyAmount > 0 && (
+          <div className="flex justify-between text-sm text-gray-600">
+            <span>Daily ({daysWorked} days × {formatCurrency(dailyRate || (rateType === 'DAILY' ? rate : 0))}/day):</span>
+            <span>{formatCurrency(dailyAmount)}</span>
+          </div>
+        )}
+        {additionalAmount > 0 && (
           <div className="flex justify-between text-sm text-gray-600">
             <span>Additional Hours ({additionalHours} × {formatCurrency(additionalHoursRate)}):</span>
             <span>+{formatCurrency(additionalAmount)}</span>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -34,12 +34,15 @@ import { getTimesheets, deleteTimesheet, approveTimesheet, rejectTimesheet, mark
 import { sendTimesheetEmail } from '@/app/actions/email'
 import { formatCurrency, formatDate, getTimesheetStatusColor } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
-import { Plus, Search, Check, X, Download, Edit, Trash2, Receipt, Banknote, Mail } from 'lucide-react'
+import { Plus, Search, Check, X, Download, Edit, Trash2, Banknote, Mail } from 'lucide-react'
 import type { Timesheet } from '@prisma/client'
 
 type TimesheetWithRelations = Timesheet & {
   rateType?: 'HOURLY' | 'DAILY'
   daysWorked?: number | null
+  dailyRate?: number | null
+  additionalHours?: number
+  additionalHoursRate?: number
   subcontractor: { name: string; cisStatus: string; email?: string }
 }
 
@@ -55,11 +58,7 @@ export default function TimesheetsPage() {
   const [sendingEmailId, setSendingEmailId] = useState<string | null>(null)
   const { toast } = useToast()
 
-  useEffect(() => {
-    loadTimesheets()
-  }, [])
-
-  const loadTimesheets = async () => {
+  const loadTimesheets = useCallback(async () => {
     try {
       setIsLoading(true)
       const data = await getTimesheets()
@@ -73,7 +72,11 @@ export default function TimesheetsPage() {
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [toast])
+
+  useEffect(() => {
+    loadTimesheets()
+  }, [loadTimesheets])
 
   const handleCreateClick = () => {
     setEditingTimesheet(null)
@@ -211,7 +214,7 @@ export default function TimesheetsPage() {
   }
 
   const buildSingleTimesheetCsv = (timesheet: TimesheetWithRelations) => {
-    const rateType = (timesheet as any).rateType ?? 'HOURLY'
+    const rateType = timesheet.rateType ?? 'HOURLY'
     return [
       ['Timesheet Details'],
       [''],
@@ -225,7 +228,7 @@ export default function TimesheetsPage() {
       [''],
       ['Rate Type', rateType],
       ['Hours Worked', timesheet.hoursWorked.toString()],
-      ['Days Worked', ((timesheet as any).daysWorked ?? '').toString()],
+      ['Days Worked', (timesheet.daysWorked ?? '').toString()],
       [rateType === 'DAILY' ? 'Rate (£/day)' : 'Rate (£/hr)', timesheet.rate.toString()],
       ['Gross Amount', timesheet.grossAmount.toString()],
       ['Expenses', (timesheet.expenses || 0).toString()],
@@ -281,8 +284,8 @@ export default function TimesheetsPage() {
       'Notes',
     ]
     const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`
-    const rows = filteredTimesheets.map(t => {
-      const rateType = (t as any).rateType ?? 'HOURLY'
+    const rows = filteredTimesheets.map((t: TimesheetWithRelations) => {
+      const rateType = t.rateType ?? 'HOURLY'
       return [
         t.subcontractor?.name || '',
         t.subcontractor?.cisStatus?.replace('_', ' ') || '',
@@ -292,7 +295,7 @@ export default function TimesheetsPage() {
         t.submittedVia || '',
         rateType,
         t.hoursWorked.toString(),
-        (t as any).daysWorked != null ? String((t as any).daysWorked) : '',
+        t.daysWorked != null ? String(t.daysWorked) : '',
         t.rate.toString(),
         t.grossAmount.toString(),
         (t.expenses || 0).toString(),
@@ -432,29 +435,27 @@ export default function TimesheetsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Subcontractor</TableHead>
-                <TableHead>Period</TableHead>
                 <TableHead>Submitted</TableHead>
-                <TableHead>Hours / Days</TableHead>
+                <TableHead>Time</TableHead>
                 <TableHead>Rate</TableHead>
                 <TableHead>Gross</TableHead>
                 <TableHead>Expenses</TableHead>
                 <TableHead>CIS</TableHead>
                 <TableHead>Net Pay</TableHead>
-                <TableHead>Receipts</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="w-0 text-right" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={12} className="text-center py-8">
+                  <TableCell colSpan={10} className="text-center py-8">
                     <p className="text-gray-500">Loading timesheets...</p>
                   </TableCell>
                 </TableRow>
               ) : filteredTimesheets.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={12} className="text-center py-8">
+                  <TableCell colSpan={10} className="text-center py-8">
                     <p className="text-gray-500">No timesheets found</p>
                   </TableCell>
                 </TableRow>
@@ -463,68 +464,67 @@ export default function TimesheetsPage() {
                   const cisStatus = timesheet.subcontractor?.cisStatus || 'NOT_VERIFIED'
                   return (
                     <TableRow key={timesheet.id}>
-                      <TableCell>
+                      <TableCell className="align-top">
                         <div className="flex flex-col">
                           <span className="font-medium">{timesheet.subcontractor?.name}</span>
                           <span className="text-xs text-gray-500">{cisStatus.replace('_', ' ')}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-gray-500">
-                        <div className="flex flex-col text-sm">
-                          <span>{formatDate(timesheet.periodStart)}</span>
-                          <span className="text-xs text-gray-400">to {formatDate(timesheet.periodEnd)}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-sm text-gray-500">
+                      <TableCell className="align-top text-sm text-gray-500">
                         {timesheet.submittedDate ? formatDate(timesheet.submittedDate) : '-'}
                       </TableCell>
-                      <TableCell>
-                        {(timesheet as TimesheetWithRelations).rateType === 'DAILY' && (timesheet as TimesheetWithRelations).daysWorked != null
-                          ? `${(timesheet as TimesheetWithRelations).daysWorked} days`
-                          : `${timesheet.hoursWorked}h`}
+                      <TableCell className="align-top">
+                        {(() => {
+                          const t = timesheet as TimesheetWithRelations
+                          const additionalHours = t.additionalHours ?? 0
+                          const lines: string[] = []
+                          if (timesheet.hoursWorked > 0 && t.rateType !== 'DAILY') lines.push(`${timesheet.hoursWorked} ${timesheet.hoursWorked === 1 ? 'hour' : 'hours'}`)
+                          if (t.daysWorked != null && t.daysWorked > 0) lines.push(`${t.daysWorked} ${t.daysWorked === 1 ? 'day' : 'days'}`)
+                          if (additionalHours > 0) lines.push(`${additionalHours} additional ${additionalHours === 1 ? 'hour' : 'hours'}`)
+                          if (lines.length === 0) return <span className="text-gray-400">-</span>
+                          return (
+                            <div className="flex flex-col gap-0.5 text-sm">
+                              {lines.map((line, i) => (
+                                <span key={i}>{line}</span>
+                              ))}
+                            </div>
+                          )
+                        })()}
                       </TableCell>
-                      <TableCell>
-                        {(timesheet as TimesheetWithRelations).rateType === 'DAILY'
-                          ? `${formatCurrency(timesheet.rate)}/day`
-                          : `${formatCurrency(timesheet.rate)}/h`}
+                      <TableCell className="align-top">
+                        {(() => {
+                          const t = timesheet as TimesheetWithRelations
+                          const additionalHours = t.additionalHours ?? 0
+                          const additionalHoursRate = t.additionalHoursRate ?? 0
+                          const lines: string[] = []
+                          if (timesheet.hoursWorked > 0 && t.rateType !== 'DAILY' && timesheet.rate > 0) lines.push(formatCurrency(timesheet.rate))
+                          if (t.daysWorked != null && t.daysWorked > 0 && (t.dailyRate ?? (t.rateType === 'DAILY' ? timesheet.rate : 0)) > 0) lines.push(formatCurrency(t.dailyRate ?? (t.rateType === 'DAILY' ? timesheet.rate : 0)))
+                          if (additionalHours > 0 && additionalHoursRate > 0) lines.push(formatCurrency(additionalHoursRate))
+                          if (lines.length === 0) return <span className="text-gray-400">-</span>
+                          return (
+                            <div className="flex flex-col gap-0.5 text-sm">
+                              {lines.map((line, i) => (
+                                <span key={i}>{line}</span>
+                              ))}
+                            </div>
+                          )
+                        })()}
                       </TableCell>
-                      <TableCell className="font-medium">{formatCurrency(timesheet.grossAmount)}</TableCell>
-                      <TableCell>
+                      <TableCell className="align-top font-medium">{formatCurrency(timesheet.grossAmount)}</TableCell>
+                      <TableCell className="align-top">
                         {timesheet.expenses > 0 ? (
                           <span className="text-sm text-blue-600">+{formatCurrency(timesheet.expenses)}</span>
                         ) : (
                           <span className="text-sm text-gray-400">-</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-red-600">
+                      <TableCell className="align-top text-red-600 whitespace-nowrap">
                         {timesheet.cisDeduction > 0 ? `-${formatCurrency(timesheet.cisDeduction)}` : '-'}
                       </TableCell>
-                      <TableCell className="font-medium text-green-600">
+                      <TableCell className="align-top font-medium text-green-600">
                         {formatCurrency(timesheet.netAmount)}
                       </TableCell>
-                      <TableCell>
-                        {(() => {
-                          const keys = (timesheet as any).receiptDocumentKeys
-                          const count = Array.isArray(keys) ? keys.length : 0
-                          if (count > 0) {
-                            return (
-                              <div className="flex items-center gap-1 text-green-600">
-                                <Receipt className="h-4 w-4" />
-                                <span className="text-sm">{count} attached</span>
-                              </div>
-                            )
-                          }
-                          return timesheet.receiptsReceived ? (
-                            <div className="flex items-center gap-1 text-green-600">
-                              <Receipt className="h-4 w-4" />
-                              <span className="text-sm">Yes</span>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-gray-400">No</span>
-                          )
-                        })()}
-                      </TableCell>
-                      <TableCell>
+                      <TableCell className="align-top">
                         <Badge
                           variant="secondary"
                           className={getTimesheetStatusColor(timesheet.status)}
@@ -532,8 +532,8 @@ export default function TimesheetsPage() {
                           {timesheet.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
+                      <TableCell className="align-top pt-2 text-right">
+                        <div className="flex -mt-0.5 items-start justify-end gap-1">
                           {timesheet.status === 'SUBMITTED' && (
                             <>
                               <Button
@@ -622,7 +622,7 @@ export default function TimesheetsPage() {
             </DialogTitle>
           </DialogHeader>
           <TimesheetForm
-            timesheet={editingTimesheet as any}
+            timesheet={editingTimesheet}
             onSuccess={handleFormSuccess}
             onCancel={() => setIsDialogOpen(false)}
           />
