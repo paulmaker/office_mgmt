@@ -232,32 +232,35 @@ model Invoice {
 }
 
 model Timesheet {
-  id                  String          @id @default(cuid())
+  id                  String              @id @default(cuid())
   entityId            String
   subcontractorId     String
   periodStart         DateTime
   periodEnd           DateTime
+  rateType            TimesheetRateType   @default(HOURLY)
   hoursWorked         Float
+  daysWorked          Float?
   rate                Float
   grossAmount         Float
-  cisDeduction        Float           @default(0)
+  cisDeduction        Float               @default(0)
   netAmount           Float
-  status              TimesheetStatus @default(SUBMITTED)
+  status              TimesheetStatus     @default(SUBMITTED)
   submittedVia        String?
   approvedBy          String?
   approvedAt          DateTime?
   processedAt         DateTime?
   paidAt              DateTime?
   notes               String?
-  createdAt           DateTime        @default(now())
-  updatedAt           DateTime        @updatedAt
-  expenses            Float           @default(0)
-  receiptsReceived    Boolean         @default(false)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  expenses            Float               @default(0)
+  receiptsReceived    Boolean             @default(false)
   submittedDate       DateTime?
-  additionalHours     Float           @default(0)
-  additionalHoursRate Float           @default(0)
-  entity              Entity          @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  subcontractor       Subcontractor   @relation(fields: [subcontractorId], references: [id])
+  additionalHours     Float               @default(0)
+  additionalHoursRate Float               @default(0)
+  receiptDocumentKeys  Json?               // Array of S3 keys for receipt images/PDFs
+  entity              Entity              @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  subcontractor       Subcontractor       @relation(fields: [subcontractorId], references: [id])
 
   @@index([entityId])
 }
@@ -533,6 +536,11 @@ enum TimesheetStatus {
   REJECTED
   PROCESSED
   PAID
+}
+
+enum TimesheetRateType {
+  HOURLY
+  DAILY
 }
 
 enum TransactionType {

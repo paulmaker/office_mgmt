@@ -31,13 +31,16 @@ import {
 } from '@/components/ui/alert-dialog'
 import { TimesheetForm } from '@/components/timesheets/timesheet-form'
 import { getTimesheets, deleteTimesheet, approveTimesheet, rejectTimesheet, markTimesheetAsPaid, getTimesheet } from '@/app/actions/timesheets'
+import { sendTimesheetEmail } from '@/app/actions/email'
 import { formatCurrency, formatDate, getTimesheetStatusColor } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
-import { Plus, Search, Check, X, Download, Edit, Trash2, Receipt, Banknote } from 'lucide-react'
+import { Plus, Search, Check, X, Download, Edit, Trash2, Receipt, Banknote, Mail } from 'lucide-react'
 import type { Timesheet } from '@prisma/client'
 
 type TimesheetWithRelations = Timesheet & {
-  subcontractor: { name: string; cisStatus: string }
+  rateType?: 'HOURLY' | 'DAILY'
+  daysWorked?: number | null
+  subcontractor: { name: string; cisStatus: string; email?: string }
 }
 
 export default function TimesheetsPage() {
@@ -49,6 +52,7 @@ export default function TimesheetsPage() {
   const [deletingTimesheetId, setDeletingTimesheetId] = useState<string | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [timesheetToDelete, setTimesheetToDelete] = useState<TimesheetWithRelations | null>(null)
+  const [sendingEmailId, setSendingEmailId] = useState<string | null>(null)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -174,6 +178,26 @@ export default function TimesheetsPage() {
     }
   }
 
+  const handleEmailTimesheet = async (id: string) => {
+    try {
+      setSendingEmailId(id)
+      await sendTimesheetEmail(id)
+      toast({
+        variant: 'success',
+        title: 'Email sent',
+        description: 'Timesheet summary has been emailed to the subcontractor.',
+      })
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to send email',
+      })
+    } finally {
+      setSendingEmailId(null)
+    }
+  }
+
   const handleFormSuccess = () => {
     setIsDialogOpen(false)
     const action = editingTimesheet ? 'updated' : 'created'
@@ -186,13 +210,9 @@ export default function TimesheetsPage() {
     loadTimesheets()
   }
 
-  const handleDownload = (id: string) => {
-    // Find the timesheet to get details for the CSV
-    const timesheet = timesheets.find(t => t.id === id)
-    if (!timesheet) return
-
-    // Create CSV content
-    const csvContent = [
+  const buildSingleTimesheetCsv = (timesheet: TimesheetWithRelations) => {
+    const rateType = (timesheet as any).rateType ?? 'HOURLY'
+    return [
       ['Timesheet Details'],
       [''],
       ['Subcontractor', timesheet.subcontractor?.name || ''],
@@ -203,8 +223,10 @@ export default function TimesheetsPage() {
       ['Submitted Date', timesheet.submittedDate ? formatDate(timesheet.submittedDate) : ''],
       ['Submitted Via', timesheet.submittedVia || ''],
       [''],
+      ['Rate Type', rateType],
       ['Hours Worked', timesheet.hoursWorked.toString()],
-      ['Rate (£/hr)', timesheet.rate.toString()],
+      ['Days Worked', ((timesheet as any).daysWorked ?? '').toString()],
+      [rateType === 'DAILY' ? 'Rate (£/day)' : 'Rate (£/hr)', timesheet.rate.toString()],
       ['Gross Amount', timesheet.grossAmount.toString()],
       ['Expenses', (timesheet.expenses || 0).toString()],
       ['CIS Deduction', timesheet.cisDeduction.toString()],
@@ -214,29 +236,93 @@ export default function TimesheetsPage() {
       ['Status', timesheet.status],
       ['Notes', timesheet.notes || ''],
     ]
-      .map(row => row.map(cell => `"${cell}"`).join(','))
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
       .join('\n')
+  }
 
-    // Create and download the file
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
-    const link = document.createElement('a')
-    const url = URL.createObjectURL(blob)
-    link.setAttribute('href', url)
-    link.setAttribute(
-      'download',
-      `timesheet-${timesheet.subcontractor?.name?.replace(/\s+/g, '-') || 'unknown'}-${formatDate(timesheet.periodStart)}.csv`
-    )
-    link.style.visibility = 'hidden'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-
+  const handleDownload = (id: string) => {
+    const timesheet = timesheets.find(t => t.id === id)
+    if (!timesheet) return
+    const csvContent = buildSingleTimesheetCsv(timesheet)
+    downloadCsv(csvContent, `timesheet-${timesheet.subcontractor?.name?.replace(/\s+/g, '-') || 'unknown'}-${formatDate(timesheet.periodStart)}.csv`)
     toast({
       variant: 'success',
       title: 'Downloaded',
       description: 'Timesheet has been downloaded as CSV.',
     })
+  }
+
+  const handleDownloadAll = () => {
+    if (filteredTimesheets.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'No timesheets',
+        description: 'There are no timesheets to download.',
+      })
+      return
+    }
+    const header = [
+      'Subcontractor',
+      'CIS Status',
+      'Period Start',
+      'Period End',
+      'Submitted Date',
+      'Submitted Via',
+      'Rate Type',
+      'Hours Worked',
+      'Days Worked',
+      'Rate (£/hr or £/day)',
+      'Gross Amount',
+      'Expenses',
+      'CIS Deduction',
+      'Net Amount',
+      'Receipts Received',
+      'Status',
+      'Notes',
+    ]
+    const escape = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`
+    const rows = filteredTimesheets.map(t => {
+      const rateType = (t as any).rateType ?? 'HOURLY'
+      return [
+        t.subcontractor?.name || '',
+        t.subcontractor?.cisStatus?.replace('_', ' ') || '',
+        formatDate(t.periodStart),
+        formatDate(t.periodEnd),
+        t.submittedDate ? formatDate(t.submittedDate) : '',
+        t.submittedVia || '',
+        rateType,
+        t.hoursWorked.toString(),
+        (t as any).daysWorked != null ? String((t as any).daysWorked) : '',
+        t.rate.toString(),
+        t.grossAmount.toString(),
+        (t.expenses || 0).toString(),
+        t.cisDeduction.toString(),
+        t.netAmount.toString(),
+        t.receiptsReceived ? 'Yes' : 'No',
+        t.status,
+        t.notes || '',
+      ]
+    })
+    const csvContent = [header.map(escape).join(','), ...rows.map(r => r.map(escape).join(','))].join('\n')
+    downloadCsv(csvContent, `timesheets-export-${formatDate(new Date())}.csv`)
+    toast({
+      variant: 'success',
+      title: 'Downloaded',
+      description: `${filteredTimesheets.length} timesheet(s) exported as CSV.`,
+    })
+  }
+
+  function downloadCsv(content: string, filename: string) {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute('download', filename)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   }
 
   const filteredTimesheets = timesheets.filter(timesheet => {
@@ -267,10 +353,16 @@ export default function TimesheetsPage() {
             Review and approve subcontractor timesheets
           </p>
         </div>
-        <Button onClick={handleCreateClick}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Timesheet
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleDownloadAll} disabled={timesheets.length === 0}>
+            <Download className="h-4 w-4 mr-2" />
+            Download all (CSV)
+          </Button>
+          <Button onClick={handleCreateClick}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Timesheet
+          </Button>
+        </div>
       </div>
 
       {/* Stats Cards */}
@@ -342,7 +434,7 @@ export default function TimesheetsPage() {
                 <TableHead>Subcontractor</TableHead>
                 <TableHead>Period</TableHead>
                 <TableHead>Submitted</TableHead>
-                <TableHead>Hours</TableHead>
+                <TableHead>Hours / Days</TableHead>
                 <TableHead>Rate</TableHead>
                 <TableHead>Gross</TableHead>
                 <TableHead>Expenses</TableHead>
@@ -386,8 +478,16 @@ export default function TimesheetsPage() {
                       <TableCell className="text-sm text-gray-500">
                         {timesheet.submittedDate ? formatDate(timesheet.submittedDate) : '-'}
                       </TableCell>
-                      <TableCell>{timesheet.hoursWorked}h</TableCell>
-                      <TableCell>{formatCurrency(timesheet.rate)}/h</TableCell>
+                      <TableCell>
+                        {(timesheet as TimesheetWithRelations).rateType === 'DAILY' && (timesheet as TimesheetWithRelations).daysWorked != null
+                          ? `${(timesheet as TimesheetWithRelations).daysWorked} days`
+                          : `${timesheet.hoursWorked}h`}
+                      </TableCell>
+                      <TableCell>
+                        {(timesheet as TimesheetWithRelations).rateType === 'DAILY'
+                          ? `${formatCurrency(timesheet.rate)}/day`
+                          : `${formatCurrency(timesheet.rate)}/h`}
+                      </TableCell>
                       <TableCell className="font-medium">{formatCurrency(timesheet.grossAmount)}</TableCell>
                       <TableCell>
                         {timesheet.expenses > 0 ? (
@@ -403,14 +503,26 @@ export default function TimesheetsPage() {
                         {formatCurrency(timesheet.netAmount)}
                       </TableCell>
                       <TableCell>
-                        {timesheet.receiptsReceived ? (
-                          <div className="flex items-center gap-1 text-green-600">
-                            <Receipt className="h-4 w-4" />
-                            <span className="text-sm">Yes</span>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-gray-400">No</span>
-                        )}
+                        {(() => {
+                          const keys = (timesheet as any).receiptDocumentKeys
+                          const count = Array.isArray(keys) ? keys.length : 0
+                          if (count > 0) {
+                            return (
+                              <div className="flex items-center gap-1 text-green-600">
+                                <Receipt className="h-4 w-4" />
+                                <span className="text-sm">{count} attached</span>
+                              </div>
+                            )
+                          }
+                          return timesheet.receiptsReceived ? (
+                            <div className="flex items-center gap-1 text-green-600">
+                              <Receipt className="h-4 w-4" />
+                              <span className="text-sm">Yes</span>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-400">No</span>
+                          )
+                        })()}
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -459,8 +571,18 @@ export default function TimesheetsPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleEditClick(timesheet)}
+                            title="Edit"
                           >
                             <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEmailTimesheet(timesheet.id)}
+                            disabled={!timesheet.subcontractor?.email || sendingEmailId === timesheet.id}
+                            title={timesheet.subcontractor?.email ? 'Email to subcontractor' : 'No subcontractor email'}
+                          >
+                            <Mail className="h-4 w-4" />
                           </Button>
                           {timesheet.status !== 'PROCESSED' && timesheet.status !== 'PAID' && (
                             <Button
@@ -476,7 +598,7 @@ export default function TimesheetsPage() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDownload(timesheet.id)}
-                            title="Download timesheet"
+                            title="Download as CSV"
                           >
                             <Download className="h-4 w-4" />
                           </Button>

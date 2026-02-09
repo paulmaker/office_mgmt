@@ -7,7 +7,7 @@ import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
 import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 import { calculateCISDeduction } from '@/lib/utils'
-import type { TimesheetStatus } from '@prisma/client'
+import type { TimesheetStatus, TimesheetRateType } from '@prisma/client'
 import { requireModule } from '@/lib/module-access'
 
 /**
@@ -84,16 +84,31 @@ export async function getTimesheet(id: string) {
 /**
  * Create a new timesheet
  */
+function computeRegularAmount(
+  rateType: TimesheetRateType,
+  rate: number,
+  hoursWorked: number,
+  daysWorked: number | null | undefined
+): number {
+  if (rateType === 'DAILY' && daysWorked != null) {
+    return daysWorked * rate
+  }
+  return hoursWorked * rate
+}
+
 export async function createTimesheet(data: {
   subcontractorId: string
   periodStart: Date
   periodEnd: Date
+  rateType?: TimesheetRateType
   hoursWorked: number
+  daysWorked?: number | null
   rate: number
   additionalHours?: number
   additionalHoursRate?: number
   expenses?: number
   receiptsReceived?: boolean
+  receiptDocumentKeys?: string[] | null
   submittedDate?: Date
   submittedVia?: string
   notes?: string
@@ -114,8 +129,8 @@ export async function createTimesheet(data: {
       return { success: false, error: 'Subcontractor does not belong to your entity' }
 
     const timesheetEntityId = entityId
-
-    const regularAmount = data.hoursWorked * data.rate
+    const rateType = data.rateType ?? 'HOURLY'
+    const regularAmount = computeRegularAmount(rateType, data.rate, data.hoursWorked, data.daysWorked)
     const additionalHours = data.additionalHours || 0
     const additionalHoursRate = data.additionalHoursRate || 0
     const additionalAmount = additionalHours * additionalHoursRate
@@ -131,7 +146,9 @@ export async function createTimesheet(data: {
           subcontractorId: data.subcontractorId,
           periodStart: data.periodStart,
           periodEnd: data.periodEnd,
+          rateType,
           hoursWorked: data.hoursWorked,
+          daysWorked: data.daysWorked ?? undefined,
           rate: data.rate,
           additionalHours,
           additionalHoursRate,
@@ -140,6 +157,7 @@ export async function createTimesheet(data: {
           expenses,
           netAmount,
           receiptsReceived: data.receiptsReceived || false,
+          receiptDocumentKeys: data.receiptDocumentKeys && data.receiptDocumentKeys.length > 0 ? data.receiptDocumentKeys : undefined,
           submittedDate: data.submittedDate,
           submittedVia: data.submittedVia || 'MANUAL',
           status: 'SUBMITTED',
@@ -166,13 +184,16 @@ export async function createTimesheet(data: {
             subcontractorId: data.subcontractorId,
             periodStart: data.periodStart,
             periodEnd: data.periodEnd,
+            rateType,
             hoursWorked: data.hoursWorked,
+            daysWorked: data.daysWorked ?? undefined,
             rate: data.rate,
             grossAmount,
             cisDeduction,
             expenses,
             netAmount,
             receiptsReceived: data.receiptsReceived || false,
+            receiptDocumentKeys: data.receiptDocumentKeys && data.receiptDocumentKeys.length > 0 ? data.receiptDocumentKeys : undefined,
             submittedDate: data.submittedDate,
             submittedVia: data.submittedVia || 'MANUAL',
             status: 'SUBMITTED',
@@ -199,12 +220,15 @@ export async function updateTimesheet(
     subcontractorId?: string
     periodStart?: Date
     periodEnd?: Date
+    rateType?: TimesheetRateType
     hoursWorked?: number
+    daysWorked?: number | null
     rate?: number
     additionalHours?: number
     additionalHoursRate?: number
     expenses?: number
     receiptsReceived?: boolean
+    receiptDocumentKeys?: string[] | null
     submittedDate?: Date
     submittedVia?: string
     status?: TimesheetStatus
@@ -229,58 +253,62 @@ export async function updateTimesheet(
     if (existingTimesheet.entityId !== entityId)
       return { success: false, error: 'You do not have permission to update this timesheet' }
 
-    // Handle empty string for subcontractorId - use existing if empty/undefined
-    const subcontractorId = (data.subcontractorId && data.subcontractorId.trim() !== '') 
-      ? data.subcontractorId 
+    const subcontractorId = (data.subcontractorId && data.subcontractorId.trim() !== '')
+      ? data.subcontractorId
       : existingTimesheet.subcontractorId
     const subcontractor = await prisma.subcontractor.findUnique({ where: { id: subcontractorId } })
     if (!subcontractor) return { success: false, error: 'Subcontractor not found' }
 
+    const rateType = data.rateType ?? existingTimesheet.rateType
     const hoursWorked = data.hoursWorked ?? existingTimesheet.hoursWorked
-  const rate = data.rate ?? existingTimesheet.rate
-  const additionalHours = data.additionalHours ?? existingTimesheet.additionalHours ?? 0
-  const additionalHoursRate = data.additionalHoursRate ?? existingTimesheet.additionalHoursRate ?? 0
-  const regularAmount = hoursWorked * rate
-  const additionalAmount = additionalHours * additionalHoursRate
-  const grossAmount = regularAmount + additionalAmount
-  const cisDeduction = calculateCISDeduction(grossAmount, subcontractor.cisStatus)
-  const expenses = data.expenses ?? existingTimesheet.expenses
-  const netAmount = grossAmount - cisDeduction + expenses
+    const daysWorked = data.daysWorked !== undefined ? data.daysWorked : existingTimesheet.daysWorked
+    const rate = data.rate ?? existingTimesheet.rate
+    const additionalHours = data.additionalHours ?? existingTimesheet.additionalHours ?? 0
+    const additionalHoursRate = data.additionalHoursRate ?? existingTimesheet.additionalHoursRate ?? 0
+    const regularAmount = computeRegularAmount(rateType, rate, hoursWorked, daysWorked)
+    const additionalAmount = additionalHours * additionalHoursRate
+    const grossAmount = regularAmount + additionalAmount
+    const cisDeduction = calculateCISDeduction(grossAmount, subcontractor.cisStatus)
+    const expenses = data.expenses ?? existingTimesheet.expenses
+    const netAmount = grossAmount - cisDeduction + expenses
 
-  // Convert empty string to undefined for subcontractorId
-  const updateSubcontractorId = (data.subcontractorId && data.subcontractorId.trim() !== '') 
-    ? data.subcontractorId 
-    : undefined
+    const updateSubcontractorId = (data.subcontractorId && data.subcontractorId.trim() !== '')
+      ? data.subcontractorId
+      : undefined
 
-  // Update timesheet
-  const timesheet = await prisma.timesheet.update({
-    where: { id },
-    data: {
-      subcontractorId: updateSubcontractorId,
-      periodStart: data.periodStart,
-      periodEnd: data.periodEnd,
-      hoursWorked,
-      rate,
-      additionalHours,
-      additionalHoursRate,
-      grossAmount,
-      cisDeduction,
-      expenses,
-      netAmount,
-      receiptsReceived: data.receiptsReceived,
-      submittedDate: data.submittedDate,
-      submittedVia: data.submittedVia,
-      status: data.status,
-      notes: data.notes,
-    },
-    include: {
-      subcontractor: true,
-    },
-  })
+    const timesheet = await prisma.timesheet.update({
+      where: { id },
+      data: {
+        subcontractorId: updateSubcontractorId,
+        periodStart: data.periodStart,
+        periodEnd: data.periodEnd,
+        rateType,
+        hoursWorked,
+        daysWorked: daysWorked ?? undefined,
+        rate,
+        additionalHours,
+        additionalHoursRate,
+        grossAmount,
+        cisDeduction,
+        expenses,
+        netAmount,
+        receiptsReceived: data.receiptsReceived,
+        receiptDocumentKeys: data.receiptDocumentKeys !== undefined
+          ? (data.receiptDocumentKeys && data.receiptDocumentKeys.length > 0 ? data.receiptDocumentKeys : null)
+          : undefined,
+        submittedDate: data.submittedDate,
+        submittedVia: data.submittedVia,
+        status: data.status,
+        notes: data.notes,
+      },
+      include: {
+        subcontractor: true,
+      },
+    })
 
-  revalidatePath('/timesheets')
-  revalidatePath(`/timesheets/${id}`)
-  return { success: true, data: timesheet }
+    revalidatePath('/timesheets')
+    revalidatePath(`/timesheets/${id}`)
+    return { success: true, data: timesheet }
   } catch (e) {
     return { success: false, error: e instanceof Error ? e.message : 'An unexpected error occurred' }
   }
