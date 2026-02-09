@@ -130,28 +130,29 @@ model VerificationToken {
 }
 
 model Client {
-  id             String        @id @default(cuid())
-  entityId       String
-  name           String
-  companyName    String?
-  email          String
-  phone          String?
-  address        String?
-  billingAddress String?
-  vatNumber      String?
-  vatRegistered  Boolean       @default(false)
-  cisRegistered  Boolean       @default(false)
-  paymentTerms   Int           @default(30)
-  ratesConfig    Json?
-  notes          String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  referenceCode  String?
-  entity         Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
-  salesInvoices  Invoice[]     @relation("ClientSalesInvoices")
-  invoiceCodes   InvoiceCode[]
-  jobs           Job[]
-  jobPrices      JobPrice[]
+  id              String        @id @default(cuid())
+  entityId        String
+  name            String
+  companyName     String?
+  email           String
+  phone           String?
+  address         String?
+  billingAddress  String?
+  vatNumber       String?
+  vatRegistered   Boolean       @default(false)
+  cisRegistered   Boolean       @default(false)
+  paymentTerms    Int           @default(30)
+  ratesConfig     Json?
+  invoiceEmails   Json?         // [{ email: string, sendInvoices: boolean }]
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  referenceCode   String?
+  entity          Entity        @relation(fields: [entityId], references: [id], onDelete: Cascade)
+  salesInvoices   Invoice[]     @relation("ClientSalesInvoices")
+  invoiceCodes    InvoiceCode[]
+  jobs            Job[]
+  jobPrices       JobPrice[]
 
   @@index([entityId])
 }

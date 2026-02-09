@@ -1,5 +1,6 @@
 'use server'
 
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
@@ -78,6 +79,8 @@ export async function getClient(id: string) {
 /**
  * Create a new client
  */
+export type ClientInvoiceEmail = { email: string; sendInvoices: boolean }
+
 export async function createClient(data: {
   name: string
   companyName?: string
@@ -91,6 +94,7 @@ export async function createClient(data: {
   paymentTerms?: number
   referenceCode?: string
   ratesConfig?: any
+  invoiceEmails?: ClientInvoiceEmail[] | null
   notes?: string
 }) {
   try {
@@ -181,6 +185,7 @@ export async function createClient(data: {
         paymentTerms: data.paymentTerms ?? 30,
         referenceCode: referenceCode,
         ratesConfig: data.ratesConfig,
+        invoiceEmails: data.invoiceEmails && data.invoiceEmails.length > 0 ? (data.invoiceEmails as object) : undefined,
         notes: data.notes,
       },
     })
@@ -222,6 +227,7 @@ export async function updateClient(
     paymentTerms?: number
     referenceCode?: string
     ratesConfig?: any
+    invoiceEmails?: ClientInvoiceEmail[] | null
     notes?: string
   }
 ) {
@@ -295,6 +301,9 @@ export async function updateClient(
         paymentTerms: data.paymentTerms,
         referenceCode: validatedReferenceCode,
         ratesConfig: data.ratesConfig,
+        invoiceEmails: data.invoiceEmails !== undefined
+          ? (data.invoiceEmails && data.invoiceEmails.length > 0 ? (data.invoiceEmails as object) : Prisma.JsonNull)
+          : undefined,
         notes: data.notes,
       },
     })

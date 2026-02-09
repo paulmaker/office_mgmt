@@ -7,6 +7,19 @@ import { renderToBuffer } from "@react-pdf/renderer"
 import { InvoicePDF } from "@/lib/invoice-pdf"
 import { formatCurrency } from "@/lib/utils"
 
+function getInvoiceRecipients(client: { email: string; invoiceEmails?: unknown }): string[] {
+  const raw = client.invoiceEmails
+  if (Array.isArray(raw)) {
+    const selected = raw
+      .filter((item: unknown) => item != null && typeof item === 'object' && (item as { sendInvoices?: boolean }).sendInvoices)
+      .map((item: unknown) => (item as { email?: string }).email)
+      .filter((e): e is string => typeof e === 'string' && e.trim().length > 0)
+    if (selected.length > 0) return selected
+  }
+  if (client.email?.trim()) return [client.email.trim()]
+  return []
+}
+
 export async function sendInvoiceEmail(invoiceId: string) {
   try {
     const session = await auth()
@@ -30,43 +43,49 @@ export async function sendInvoiceEmail(invoiceId: string) {
       throw new Error("Invoice not found")
     }
 
-    if (!invoice.client?.email) {
-      throw new Error("Client has no email address")
+    if (!invoice.client) {
+      throw new Error("Invoice has no client")
     }
 
-    // Generate PDF Buffer
-    // Note: renderToBuffer returns a Buffer, which Resend accepts
+    const recipients = getInvoiceRecipients(invoice.client as { email: string; invoiceEmails?: unknown })
+    if (recipients.length === 0) {
+      throw new Error("Client has no email address (add a primary email or invoice emails with Send invoices ticked)")
+    }
+
+    // Generate PDF once
     const pdfBuffer = await renderToBuffer(
       // @ts-ignore - InvoicePDF props are loose for now
       <InvoicePDF invoice={invoice} entity={invoice.entity} />
     )
 
-    // Send Email
-    const { data, error } = await resend.emails.send({
-      from: EMAIL_FROM,
-      to: invoice.client.email,
-      subject: `Invoice #${invoice.invoiceNumber} from ${invoice.entity.name}`,
-      html: `
-        <p>Dear ${invoice.client.name},</p>
-        <p>Please find attached invoice <strong>#${invoice.invoiceNumber}</strong> for <strong>${formatCurrency(invoice.total)}</strong>.</p>
-        <p>Due date: ${new Date(invoice.dueDate).toLocaleDateString()}</p>
-        <p>Thank you for your business.</p>
-        <p>Best regards,<br>${invoice.entity.name}</p>
-      `,
-      attachments: [
-        {
-          filename: `Invoice-${invoice.invoiceNumber}.pdf`,
-          content: pdfBuffer,
-        },
-      ],
-    })
+    const subject = `Invoice #${invoice.invoiceNumber} from ${invoice.entity.name}`
+    const html = `
+      <p>Dear ${invoice.client.name},</p>
+      <p>Please find attached invoice <strong>#${invoice.invoiceNumber}</strong> for <strong>${formatCurrency(invoice.total)}</strong>.</p>
+      <p>Due date: ${new Date(invoice.dueDate).toLocaleDateString()}</p>
+      <p>Thank you for your business.</p>
+      <p>Best regards,<br>${invoice.entity.name}</p>
+    `
+    const attachments = [
+      { filename: `Invoice-${invoice.invoiceNumber}.pdf`, content: pdfBuffer },
+    ]
 
-    if (error) {
-      console.error("Resend Error:", error)
-      throw new Error(error.message)
+    let lastId: string | undefined
+    for (const to of recipients) {
+      const { data, error } = await resend.emails.send({
+        from: EMAIL_FROM,
+        to,
+        subject,
+        html,
+        attachments,
+      })
+      if (error) {
+        console.error("Resend Error:", error)
+        throw new Error(error.message)
+      }
+      lastId = data?.id
     }
 
-    // Update status to SENT if it was DRAFT
     if (invoice.status === 'DRAFT') {
       await prisma.invoice.update({
         where: { id: invoiceId },
@@ -74,7 +93,7 @@ export async function sendInvoiceEmail(invoiceId: string) {
       })
     }
 
-    return { success: true, messageId: data?.id }
+    return { success: true, messageId: lastId, sentTo: recipients.length }
   } catch (error) {
     console.error("Send Invoice Error:", error)
     throw new Error(error instanceof Error ? error.message : "Failed to send email")

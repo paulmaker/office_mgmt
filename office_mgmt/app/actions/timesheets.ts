@@ -1,5 +1,6 @@
 'use server'
 
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
@@ -294,7 +295,7 @@ export async function updateTimesheet(
         netAmount,
         receiptsReceived: data.receiptsReceived,
         receiptDocumentKeys: data.receiptDocumentKeys !== undefined
-          ? (data.receiptDocumentKeys && data.receiptDocumentKeys.length > 0 ? data.receiptDocumentKeys : null)
+          ? (data.receiptDocumentKeys && data.receiptDocumentKeys.length > 0 ? data.receiptDocumentKeys : Prisma.JsonNull)
           : undefined,
         submittedDate: data.submittedDate,
         submittedVia: data.submittedVia,

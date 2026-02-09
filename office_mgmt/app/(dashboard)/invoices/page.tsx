@@ -149,11 +149,14 @@ export default function InvoicesPage() {
   const handleSendEmail = async (id: string) => {
     try {
       setSendingEmailId(id)
-      await sendInvoiceEmail(id)
+      const result = await sendInvoiceEmail(id)
+      const count = result && typeof result === 'object' && 'sentTo' in result ? (result as { sentTo?: number }).sentTo : 1
       toast({
         variant: 'success',
         title: 'Email sent',
-        description: 'Invoice has been emailed to the client.',
+        description: count && count > 1
+          ? `Invoice has been emailed to ${count} recipients.`
+          : 'Invoice has been emailed to the client.',
       })
       // Refresh to update status if changed to SENT
       loadInvoices()

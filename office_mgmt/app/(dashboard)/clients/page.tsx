@@ -169,7 +169,7 @@ export default function ClientsPage() {
                 <TableHead>Company</TableHead>
                 <TableHead>Contact</TableHead>
                 <TableHead>Address</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Type (VAT/CIS)</TableHead>
                 <TableHead>Payment Terms</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
