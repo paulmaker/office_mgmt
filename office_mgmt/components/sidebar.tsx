@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
+import type { Session } from 'next-auth'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
@@ -46,40 +47,43 @@ const navigation = [
 
 export function Sidebar({ hasMultipleEntities = false }: { hasMultipleEntities?: boolean }) {
   const pathname = usePathname()
-  const { data: session } = useSession()
-  const userRole = (session?.user as any)?.role
-  const enabledModules = (session?.user as any)?.enabledModules || []
-  const organizationName = (session?.user as any)?.organizationName || 'Office Manager'
-  const entityName = (session?.user as any)?.entityName
+  const { data: session } = useSession() as { data: Session | null }
+  const user = session?.user
+  const userRole = user?.role
+  const enabledModules = user?.enabledModules ?? []
+  const organizationName = user?.organizationName ?? 'Office Manager'
+  const entityName = user?.entityName
 
   return (
-    <div className="flex h-full w-64 flex-col bg-gray-900">
-      <div className="flex h-16 items-center px-6">
+    <div className="flex h-full w-64 flex-col overflow-hidden bg-gray-900">
+      <div className="flex h-16 shrink-0 items-center px-6">
         <h1 className="text-xl font-bold text-white">{organizationName}</h1>
       </div>
-      {hasMultipleEntities && (
-        <div className="px-3 pb-2">
-          <Link
-            href="/auth/choose-entity"
-            className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-              pathname === '/auth/choose-entity'
-                ? 'bg-gray-800 text-white'
-                : 'text-gray-300 hover:bg-gray-800 hover:text-white'
-            )}
-          >
-            <Building2 className="h-5 w-5" />
-            <span className="flex flex-col items-start">
-              <span>Switch entity</span>
-              {entityName && <span className="text-xs text-gray-500 font-normal">{entityName}</span>}
-            </span>
-          </Link>
-        </div>
-      )}
-      <nav className="flex-1 space-y-1 px-3 py-4">
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {hasMultipleEntities && (
+          <div className="px-3 pb-2">
+            <Link
+              href="/auth/choose-entity"
+              className={cn(
+                'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                pathname === '/auth/choose-entity'
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+              )}
+            >
+              <Building2 className="h-5 w-5" />
+              <span className="flex flex-col items-start">
+                <span>Switch entity</span>
+                {entityName && <span className="text-xs text-gray-500 font-normal">{entityName}</span>}
+              </span>
+            </Link>
+          </div>
+        )}
+        <nav className="space-y-1 px-3 py-4">
         {navigation.map((item) => {
           // Hide admin link if user doesn't have admin role
-          if (item.adminOnly && !['PLATFORM_ADMIN', 'ACCOUNT_ADMIN', 'ENTITY_ADMIN'].includes(userRole)) {
+          const adminRoles: string[] = ['PLATFORM_ADMIN', 'ACCOUNT_ADMIN', 'ENTITY_ADMIN']
+          if (item.adminOnly && (!userRole || !adminRoles.includes(userRole))) {
             return null
           }
 
@@ -106,8 +110,9 @@ export function Sidebar({ hasMultipleEntities = false }: { hasMultipleEntities?:
             </Link>
           )
         })}
-      </nav>
-      <div className="border-t border-gray-800 p-4">
+        </nav>
+      </div>
+      <div className="shrink-0 border-t border-gray-800 p-4">
         <div className="text-xs text-gray-400 mb-3">
           <p className="font-medium text-white">
             {session?.user?.name || 'User'}
