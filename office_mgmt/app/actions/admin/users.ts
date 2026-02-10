@@ -380,7 +380,8 @@ export async function resendInvite(userId: string) {
 
   if (error) {
     console.error('Resend API Error:', error)
-    throw new Error('Failed to send invite email')
+    const message = error?.message ? String(error.message) : 'Failed to send invite email'
+    throw new Error(message)
   }
 
   return { success: true }
