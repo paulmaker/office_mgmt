@@ -7,6 +7,7 @@ import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
 import type { Role } from '@/lib/platform-core/rbac/types'
 import { randomBytes } from 'crypto'
 import { addHours } from 'date-fns'
+import { getBaseUrl } from '@/lib/app-url'
 import { resend, EMAIL_FROM } from '@/lib/email'
 
 /**
@@ -111,7 +112,7 @@ export async function createUser(data: {
   // Send Invite Email
   let emailSent = false
   try {
-    const baseUrl = process.env.NEXTAUTH_URL || process.env.AUTH_URL || 'http://localhost:3000'
+    const baseUrl = getBaseUrl()
     const inviteUrl = `${baseUrl}/auth/reset-password?token=${token}`
 
     const { error } = await resend.emails.send({

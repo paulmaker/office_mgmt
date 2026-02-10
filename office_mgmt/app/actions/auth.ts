@@ -1,6 +1,7 @@
 'use server'
 
 import { prisma } from "@/lib/prisma"
+import { getBaseUrl } from "@/lib/app-url"
 import { resend, EMAIL_FROM } from "@/lib/email"
 import { randomBytes } from "crypto"
 import { hash } from "bcryptjs"
@@ -31,8 +32,7 @@ export async function forgotPassword(email: string) {
       }
     })
 
-    // In a real app, use the actual domain from env
-    const baseUrl = process.env.NEXTAUTH_URL || process.env.AUTH_URL || 'http://localhost:3000'
+    const baseUrl = getBaseUrl()
     const resetUrl = `${baseUrl}/auth/reset-password?token=${token}`
 
     await resend.emails.send({
@@ -130,7 +130,7 @@ export async function inviteUser(email: string, name: string, entityId: string, 
         }
     })
 
-    const baseUrl = process.env.NEXTAUTH_URL || process.env.AUTH_URL || 'http://localhost:3000'
+    const baseUrl = getBaseUrl()
     const inviteUrl = `${baseUrl}/auth/reset-password?token=${token}`
 
     await resend.emails.send({
