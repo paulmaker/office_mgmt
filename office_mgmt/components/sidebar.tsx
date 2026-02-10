@@ -120,7 +120,7 @@ export function Sidebar({ hasMultipleEntities = false }: { hasMultipleEntities?:
           )}
         </div>
         <button
-          onClick={() => signOut({ callbackUrl: '/login' })}
+          onClick={() => signOut({ callbackUrl: typeof window !== 'undefined' ? `${window.location.origin}/login` : '/login' })}
           className="flex items-center gap-2 w-full text-xs text-gray-400 hover:text-white transition-colors"
         >
           <LogOut className="h-4 w-4" />
