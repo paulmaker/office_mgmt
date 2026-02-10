@@ -2,6 +2,7 @@
 
 ## ✅ Completed
 
+
 ### 1. Database Schema Updates
 - ✅ Added `TenantAccount` model (top-level organization)
 - ✅ Added `Entity` model (sub-organization within Account)
