@@ -1,69 +1,112 @@
 /**
  * Prisma Seed Script
- * 
+ *
  * Seeds the database with:
  * - All permissions (resource-based and module-based)
  * - Role-permission mappings
- * - Initial Platform Admin user (optional)
- * - Sample TenantAccount and Entity (optional)
+ *
+ * Production mode (SEED_PRODUCTION=1):
+ * - One TenantAccount and Entity
+ * - One initial Platform Admin user with hashed password (env: INITIAL_ADMIN_EMAIL, INITIAL_ADMIN_NAME, INITIAL_ADMIN_PASSWORD)
  */
 
 import { PrismaClient } from '@prisma/client'
+import { hash } from 'bcryptjs'
 import { seedRBAC } from '../lib/platform-core/rbac/seed'
 
 const prisma = new PrismaClient()
 
-async function main() {
-  console.log('🌱 Starting database seed...\n')
+const isProductionSeed = process.env.SEED_PRODUCTION === '1'
 
-  // Seed RBAC system (permissions and role-permission mappings)
-  console.log('📋 Seeding RBAC system...')
-  await seedRBAC()
-  console.log('✅ RBAC system seeded\n')
+async function seedProduction() {
+  const email = process.env.INITIAL_ADMIN_EMAIL?.trim()
+  const name = process.env.INITIAL_ADMIN_NAME?.trim() || 'Platform Admin'
+  const password = process.env.INITIAL_ADMIN_PASSWORD?.trim()
 
-  // Optional: Create initial Platform Admin user
-  // Uncomment and modify as needed:
-  /*
-  console.log('👤 Creating initial Platform Admin user...')
-  const platformAdmin = await prisma.user.upsert({
-    where: { email: 'admin@example.com' },
+  if (!email) {
+    console.warn('⚠️  SEED_PRODUCTION=1 but INITIAL_ADMIN_EMAIL is not set. Skipping production user/org seed.')
+    return
+  }
+  if (!password || password.length < 8) {
+    console.warn('⚠️  INITIAL_ADMIN_PASSWORD must be set and at least 8 characters. Skipping production user seed.')
+    return
+  }
+
+  const orgName = process.env.INITIAL_ORG_NAME?.trim() || 'Production Organisation'
+  const orgSlug = process.env.INITIAL_ORG_SLUG?.trim() || 'production'
+  const entityName = process.env.INITIAL_ENTITY_NAME?.trim() || 'Production Company'
+  const entitySlug = process.env.INITIAL_ENTITY_SLUG?.trim() || 'production'
+
+  console.log('🏢 Creating production TenantAccount and Entity...')
+  const tenantAccount = await prisma.tenantAccount.upsert({
+    where: { slug: orgSlug },
     update: {},
     create: {
-      email: 'admin@example.com',
-      name: 'Platform Admin',
-      role: 'PLATFORM_ADMIN',
-      isActive: true,
-      // Note: You'll need to create an Entity first, or update this after creating one
-      // entityId: 'your-entity-id-here',
-    },
-  })
-  console.log('✅ Platform Admin created:', platformAdmin.email)
-  */
-
-  // Optional: Create sample TenantAccount and Entity
-  // Uncomment and modify as needed:
-  /*
-  console.log('🏢 Creating sample TenantAccount and Entity...')
-  const tenantAccount = await prisma.tenantAccount.create({
-    data: {
-      name: 'Demo Organisation',
-      slug: 'demo-org',
+      name: orgName,
+      slug: orgSlug,
       isActive: true,
       entities: {
         create: {
-          name: 'Demo Company',
-          slug: 'demo-company',
+          name: entityName,
+          slug: entitySlug,
           isActive: true,
         },
       },
     },
-    include: {
-      entities: true,
+    include: { entities: true },
+  })
+
+  let entity = tenantAccount.entities[0] ?? null
+  if (!entity) {
+    entity = await prisma.entity.upsert({
+      where: {
+        tenantAccountId_slug: { tenantAccountId: tenantAccount.id, slug: entitySlug },
+      },
+      update: {},
+      create: {
+        tenantAccountId: tenantAccount.id,
+        name: entityName,
+        slug: entitySlug,
+        isActive: true,
+      },
+    })
+  }
+  console.log('✅ TenantAccount:', tenantAccount.name)
+  console.log('✅ Entity:', entity.name)
+
+  console.log('👤 Creating initial Platform Admin user...')
+  const hashedPassword = await hash(password, 12)
+  await prisma.user.upsert({
+    where: { email: email.toLowerCase() },
+    update: {
+      name: name || undefined,
+      password: hashedPassword,
+      entityId: entity.id,
+      role: 'PLATFORM_ADMIN',
+      isActive: true,
+    },
+    create: {
+      email: email.toLowerCase(),
+      name: name || null,
+      password: hashedPassword,
+      entityId: entity.id,
+      role: 'PLATFORM_ADMIN',
+      isActive: true,
     },
   })
-  console.log('✅ Created TenantAccount:', tenantAccount.name)
-  console.log('✅ Created Entity:', tenantAccount.entities[0].name)
-  */
+  console.log('✅ Initial admin created:', email)
+}
+
+async function main() {
+  console.log('🌱 Starting database seed...\n')
+
+  console.log('📋 Seeding RBAC system...')
+  await seedRBAC()
+  console.log('✅ RBAC system seeded\n')
+
+  if (isProductionSeed) {
+    await seedProduction()
+  }
 
   console.log('\n✨ Seed completed successfully!')
 }
