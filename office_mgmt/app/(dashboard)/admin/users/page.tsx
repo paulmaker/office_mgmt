@@ -22,7 +22,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { Plus, Users, Edit, CheckCircle, XCircle, Mail, Loader2 } from 'lucide-react'
-import { createUser, getUsers, updateUser } from '@/app/actions/admin/users'
+import { createUser, getUsers, updateUser, resendInvite } from '@/app/actions/admin/users'
 import { getEntities } from '@/app/actions/admin/entities'
 import { formatDate } from '@/lib/utils'
 import type { Role } from '@/lib/platform-core/rbac/types'
@@ -42,6 +42,7 @@ export default function UsersPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editing, setEditing] = useState<any>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [resendingId, setResendingId] = useState<string | null>(null)
   const { toast } = useToast()
   
   const [formData, setFormData] = useState({
@@ -160,6 +161,25 @@ export default function UsersPage() {
     setIsDialogOpen(true)
   }
 
+  const handleResendInvite = async (user: any) => {
+    try {
+      setResendingId(user.id)
+      await resendInvite(user.id)
+      toast({
+        title: 'Invite sent',
+        description: `A new invite link has been sent to ${user.email}.`,
+      })
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to resend invite',
+      })
+    } finally {
+      setResendingId(null)
+    }
+  }
+
   const getRoleBadgeVariant = (role: Role) => {
     switch (role) {
       case 'PLATFORM_ADMIN':
@@ -251,6 +271,19 @@ export default function UsersPage() {
                     <TableCell>{formatDate(user.createdAt)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleResendInvite(user)}
+                          disabled={resendingId === user.id}
+                          title="Resend invite email with set-password link"
+                        >
+                          {resendingId === user.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Mail className="h-4 w-4" />
+                          )}
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"

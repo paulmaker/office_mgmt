@@ -318,3 +318,70 @@ export async function updateUser(
     },
   })
 }
+
+/**
+ * Resend invite email to an existing user (new link with correct base URL).
+ */
+export async function resendInvite(userId: string) {
+  const session = await auth()
+  if (!session?.user) {
+    throw new Error('Unauthorized')
+  }
+
+  const currentUserId = session.user.id as string
+  const isAdmin = await isPlatformAdmin(currentUserId)
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    include: {
+      entity: {
+        include: {
+          tenantAccount: { select: { id: true, name: true } },
+        },
+      },
+    },
+  })
+
+  if (!user) {
+    throw new Error('User not found')
+  }
+
+  if (!isAdmin) {
+    const isAccAdmin = await isAccountAdmin(currentUserId, user.entity.tenantAccountId)
+    const isEntAdmin = await isEntityAdmin(currentUserId, user.entityId)
+    if (!isAccAdmin && !isEntAdmin) {
+      throw new Error('You do not have permission to resend invite for this user')
+    }
+  }
+
+  const token = randomBytes(32).toString('hex')
+  const expiry = addHours(new Date(), 48)
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: { resetToken: token, resetTokenExpiry: expiry },
+  })
+
+  const baseUrl = getBaseUrl()
+  const inviteUrl = `${baseUrl}/auth/reset-password?token=${token}`
+
+  const { error } = await resend.emails.send({
+    from: EMAIL_FROM,
+    to: user.email,
+    subject: `Welcome to ${user.entity.name}`,
+    html: `
+      <p>Hello ${user.name || 'there'},</p>
+      <p>You have been invited to join <strong>${user.entity.name}</strong> on the Office Manager platform.</p>
+      <p>Click the link below to set your password and access your account:</p>
+      <a href="${inviteUrl}">${inviteUrl}</a>
+      <p>This link will expire in 48 hours.</p>
+    `,
+  })
+
+  if (error) {
+    console.error('Resend API Error:', error)
+    throw new Error('Failed to send invite email')
+  }
+
+  return { success: true }
+}
