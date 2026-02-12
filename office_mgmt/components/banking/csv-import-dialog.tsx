@@ -35,10 +35,11 @@ function parseCSVLine(line: string): string[] {
   return result
 }
 
-/** Parse UK bank-style amount e.g. "£12,340.80", "-£520.83", "-£1,180.03" */
+/** Parse UK bank-style amount e.g. "£12,340.80", "-£520.83"; tolerates encoding issues with £ */
 function parseAmount(val: string): number | null {
   if (!val || !val.trim()) return null
-  const cleaned = val.replace(/[£,\s]/g, '')
+  // Strip currency symbols, commas, spaces - keep digits, decimal point, minus
+  const cleaned = val.replace(/[^\d.-]/g, '')
   const n = parseFloat(cleaned)
   return isNaN(n) ? null : n
 }
@@ -108,14 +109,18 @@ export function CSVImportDialog({ open, onOpenChange, onSuccess }: CSVImportDial
     type: TransactionType
     category?: string
   }> => {
-    const lines = text.split(/\r?\n/).filter(line => line.trim())
+    const rawLines = text.split(/\r?\n/)
+    const lines = rawLines.map(l => l.trim()).filter(l => l.length > 0)
     if (lines.length === 0) return []
 
     const firstRow = parseCSVLine(lines[0])
+    const col0 = (firstRow[0] ?? '').replace(/\uFEFF/g, '').toLowerCase()
+    const col3 = (firstRow[3] ?? '').toLowerCase()
+    const col4 = (firstRow[4] ?? '').toLowerCase()
     const isBankExport =
       firstRow.length >= 5 &&
-      (firstRow[0]?.toLowerCase().includes('date') || firstRow[0] === 'Date Received') &&
-      (firstRow[3]?.toLowerCase().includes('money in') || firstRow[4]?.toLowerCase().includes('money out'))
+      (col0.includes('date') || col0 === 'date received') &&
+      (col3.includes('money') && col3.includes('in') || col4.includes('money') && col4.includes('out'))
 
     if (isBankExport) {
       // Client bank export: Date Received, Payment, Description, Money In, Money Out, ...
