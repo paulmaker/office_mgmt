@@ -25,10 +25,11 @@ import {
 import { getBankTransactions, deleteBankTransaction, unreconcileTransaction } from '@/app/actions/bank-transactions'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
-import { Upload, Download, Check, X, ArrowDownIcon, ArrowUpIcon, Edit, Trash2, FileText } from 'lucide-react'
+import { Upload, Download, Check, X, ArrowDownIcon, ArrowUpIcon, Edit, Trash2, FileText, Calendar } from 'lucide-react'
 import { CSVImportDialog } from '@/components/banking/csv-import-dialog'
 import { ReconcileDialog } from '@/components/banking/reconcile-dialog'
 import type { BankTransaction } from '@prisma/client'
+import { startOfWeek, endOfWeek, subWeeks } from 'date-fns'
 
 type BankTransactionWithRelations = BankTransaction & {
   invoice?: {
@@ -41,10 +42,13 @@ type BankTransactionWithRelations = BankTransaction & {
   } | null
 }
 
+type DateRangePreset = 'all' | 'this_week' | 'last_week' | 'last_two_weeks'
+
 export default function BankingPage() {
   const [transactions, setTransactions] = useState<BankTransactionWithRelations[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'reconciled' | 'unreconciled'>('all')
+  const [dateRange, setDateRange] = useState<DateRangePreset>('all')
   const [csvImportOpen, setCsvImportOpen] = useState(false)
   const [reconcileDialogOpen, setReconcileDialogOpen] = useState(false)
   const [selectedTransaction, setSelectedTransaction] = useState<BankTransaction | null>(null)
@@ -54,7 +58,33 @@ export default function BankingPage() {
 
   useEffect(() => {
     loadTransactions()
-  }, [filter])
+  }, [filter, dateRange])
+
+  const getDateRangeBounds = (): { startDate?: Date; endDate?: Date } => {
+    const now = new Date()
+    if (dateRange === 'all') return {}
+    if (dateRange === 'this_week') {
+      return {
+        startDate: startOfWeek(now, { weekStartsOn: 1 }),
+        endDate: endOfWeek(now, { weekStartsOn: 1 }),
+      }
+    }
+    if (dateRange === 'last_week') {
+      const lastWeek = subWeeks(now, 1)
+      return {
+        startDate: startOfWeek(lastWeek, { weekStartsOn: 1 }),
+        endDate: endOfWeek(lastWeek, { weekStartsOn: 1 }),
+      }
+    }
+    if (dateRange === 'last_two_weeks') {
+      const twoWeeksAgo = subWeeks(now, 2)
+      return {
+        startDate: startOfWeek(twoWeeksAgo, { weekStartsOn: 1 }),
+        endDate: endOfWeek(now, { weekStartsOn: 1 }),
+      }
+    }
+    return {}
+  }
 
   const loadTransactions = async () => {
     try {
@@ -65,6 +95,9 @@ export default function BankingPage() {
       } else if (filter === 'unreconciled') {
         filters.reconciled = false
       }
+      const { startDate, endDate } = getDateRangeBounds()
+      if (startDate) filters.startDate = startDate
+      if (endDate) filters.endDate = endDate
       const data = await getBankTransactions(filters)
       setTransactions(data as BankTransactionWithRelations[])
     } catch (error) {
@@ -136,7 +169,7 @@ export default function BankingPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Bank Reconciliation</h1>
           <p className="text-gray-500 mt-1">
-            Match transactions with invoices and payments
+            Upload bank export, then reconcile week by week: match payments received to invoices, wages to timesheets, and business expenses.
           </p>
         </div>
         <div className="flex gap-2">
@@ -193,6 +226,22 @@ export default function BankingPage() {
             <CardTitle className="text-3xl text-orange-600">{stats.unreconciled}</CardTitle>
           </CardHeader>
         </Card>
+      </div>
+
+      {/* Week / date range */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Calendar className="h-4 w-4 text-gray-500" />
+        <span className="text-sm text-gray-600">Show:</span>
+        {(['all', 'this_week', 'last_week', 'last_two_weeks'] as const).map((range) => (
+          <Button
+            key={range}
+            variant={dateRange === range ? 'default' : 'outline'}
+            onClick={() => setDateRange(range)}
+            size="sm"
+          >
+            {range === 'all' ? 'All dates' : range === 'this_week' ? 'This week' : range === 'last_week' ? 'Last week' : 'Last 2 weeks'}
+          </Button>
+        ))}
       </div>
 
       {/* Filter Tabs */}

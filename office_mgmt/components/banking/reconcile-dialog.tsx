@@ -116,7 +116,7 @@ export function ReconcileDialog({ open, onOpenChange, transaction, onSuccess }: 
         <DialogHeader>
           <DialogTitle>Reconcile Transaction</DialogTitle>
           <DialogDescription>
-            Link this transaction to an invoice, timesheet, or document
+            Match payments received to invoices, wages to timesheets. For business expenses, add notes or leave as-is.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

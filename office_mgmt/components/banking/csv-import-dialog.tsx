@@ -15,6 +15,75 @@ import { useToast } from '@/hooks/use-toast'
 import { Upload } from 'lucide-react'
 import type { TransactionType } from '@prisma/client'
 
+/** Parse a single CSV line respecting quoted fields (commas inside quotes stay) */
+function parseCSVLine(line: string): string[] {
+  const result: string[] = []
+  let current = ''
+  let inQuotes = false
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i]
+    if (c === '"') {
+      inQuotes = !inQuotes
+    } else if ((c === ',' || c === '\t') && !inQuotes) {
+      result.push(current.trim().replace(/^"|"$/g, ''))
+      current = ''
+    } else {
+      current += c
+    }
+  }
+  result.push(current.trim().replace(/^"|"$/g, ''))
+  return result
+}
+
+/** Parse UK bank-style amount e.g. "£12,340.80", "-£520.83", "-£1,180.03" */
+function parseAmount(val: string): number | null {
+  if (!val || !val.trim()) return null
+  const cleaned = val.replace(/[£,\s]/g, '')
+  const n = parseFloat(cleaned)
+  return isNaN(n) ? null : n
+}
+
+/** Parse date from bank export (e.g. 12/20/2025, 1/2/2026 - MM/DD/YYYY or DD/MM/YYYY) */
+function parseBankDate(val: string): string | null {
+  if (!val || !val.trim()) return null
+  const parts = val.trim().split(/[/-]/)
+  if (parts.length !== 3) return null
+  const a = parseInt(parts[0], 10)
+  const b = parseInt(parts[1], 10)
+  const c = parseInt(parts[2], 10)
+  if (isNaN(a) || isNaN(b) || isNaN(c)) return null
+  // If first part > 12 treat as DD/MM/YYYY; else MM/DD/YYYY
+  let month: number
+  let day: number
+  let year: number
+  if (a > 12) {
+    day = a
+    month = b
+    year = c
+  } else if (b > 12) {
+    month = a
+    day = b
+    year = c
+  } else {
+    month = a
+    day = b
+    year = c
+  }
+  if (year < 100) year += 2000
+  const iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  const d = new Date(iso)
+  return isNaN(d.getTime()) ? null : iso
+}
+
+/** Infer category from description for bank export (wages, business expense, etc.) */
+function inferCategory(payment: string, description: string): string | undefined {
+  const combined = `${payment} ${description}`.toLowerCase()
+  if (combined.includes('wages')) return 'Wages'
+  if (combined.includes('business expense') || combined.includes('business expense-')) return 'Business Expense'
+  if (combined.includes('payment from') || combined.includes('payment of invoice')) return 'Payment Received'
+  return undefined
+}
+
 interface CSVImportDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -39,31 +108,86 @@ export function CSVImportDialog({ open, onOpenChange, onSuccess }: CSVImportDial
     type: TransactionType
     category?: string
   }> => {
-    const lines = text.split('\n').filter(line => line.trim())
+    const lines = text.split(/\r?\n/).filter(line => line.trim())
     if (lines.length === 0) return []
 
-    // Skip header row if it exists
+    const firstRow = parseCSVLine(lines[0])
+    const isBankExport =
+      firstRow.length >= 5 &&
+      (firstRow[0]?.toLowerCase().includes('date') || firstRow[0] === 'Date Received') &&
+      (firstRow[3]?.toLowerCase().includes('money in') || firstRow[4]?.toLowerCase().includes('money out'))
+
+    if (isBankExport) {
+      // Client bank export: Date Received, Payment, Description, Money In, Money Out, ...
+      const dataLines = lines.slice(1)
+      const out: Array<{ date: string; description: string; amount: number; type: TransactionType; category?: string }> = []
+      for (const line of dataLines) {
+        const parts = parseCSVLine(line)
+        const dateReceived = parts[0] ?? ''
+        const payment = parts[1] ?? ''
+        const description = parts[2] ?? ''
+        const moneyIn = parts[3] ?? ''
+        const moneyOut = parts[4] ?? ''
+
+        const date = parseBankDate(dateReceived)
+        if (!date) continue
+        if (!payment.trim() && !description.trim()) continue
+        if (payment.toLowerCase().includes('reconcill') || description.toLowerCase().includes('reconcill')) continue
+
+        const inAmount = parseAmount(moneyIn)
+        const outAmount = parseAmount(moneyOut)
+        const hasIn = inAmount != null && inAmount > 0
+        const hasOut = outAmount != null && outAmount > 0
+
+        if (hasIn && !hasOut) {
+          out.push({
+            date,
+            description: description.trim() ? `${payment} - ${description}` : payment,
+            amount: inAmount!,
+            type: 'CREDIT',
+            category: inferCategory(payment, description),
+          })
+        } else if (hasOut && !hasIn) {
+          out.push({
+            date,
+            description: description.trim() ? `${payment} - ${description}` : payment,
+            amount: Math.abs(outAmount!),
+            type: 'DEBIT',
+            category: inferCategory(payment, description),
+          })
+        } else if (hasIn && hasOut) {
+          out.push({
+            date,
+            description: description.trim() ? `${payment} - ${description}` : payment,
+            amount: inAmount!,
+            type: 'CREDIT',
+            category: inferCategory(payment, description),
+          })
+          out.push({
+            date,
+            description: description.trim() ? `${payment} - ${description}` : payment,
+            amount: Math.abs(outAmount!),
+            type: 'DEBIT',
+            category: inferCategory(payment, description),
+          })
+        }
+      }
+      return out.filter(row => row.date && row.description && !isNaN(row.amount) && row.amount > 0)
+    }
+
+    // Legacy format: Date, Description, Amount, Type (CREDIT/DEBIT), Category (optional)
     const dataLines = lines.slice(1)
-    
+    const delimiter = lines[0].includes('\t') ? '\t' : ','
     return dataLines.map(line => {
-      // Handle CSV with commas or tabs
-      const delimiter = line.includes('\t') ? '\t' : ','
       const parts = line.split(delimiter).map(p => p.trim().replace(/^"|"$/g, ''))
-      
-      // Expected format: Date, Description, Amount, Type (CREDIT/DEBIT), Category (optional)
-      // Amount can be positive or negative
       const date = parts[0] || ''
       const description = parts[1] || ''
       const amountStr = parts[2] || '0'
       const typeStr = parts[3]?.toUpperCase() || ''
       const category = parts[4] || undefined
 
-      // Parse amount - handle negative values
       let amount = parseFloat(amountStr.replace(/[£,\s]/g, ''))
       let type: TransactionType = typeStr === 'CREDIT' ? 'CREDIT' : 'DEBIT'
-      
-      // If amount is negative, it's a debit; if positive, it's a credit
-      // But also check the type field if provided
       if (!typeStr && amount < 0) {
         type = 'DEBIT'
         amount = Math.abs(amount)
@@ -133,9 +257,9 @@ export function CSVImportDialog({ open, onOpenChange, onSuccess }: CSVImportDial
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Import Bank Transactions from CSV</DialogTitle>
+          <DialogTitle>Import Bank Export (CSV)</DialogTitle>
           <DialogDescription>
-            Upload a CSV file with bank transactions. Expected format: Date, Description, Amount, Type (CREDIT/DEBIT), Category (optional)
+            Upload the bank statement export (e.g. copy from online banking into a spreadsheet and save as CSV). Supports the standard bank export format with Date Received, Payment, Description, Money In, Money Out.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -153,11 +277,9 @@ export function CSVImportDialog({ open, onOpenChange, onSuccess }: CSVImportDial
             )}
           </div>
           <div className="bg-gray-50 p-3 rounded text-xs text-gray-600">
-            <p className="font-medium mb-1">CSV Format:</p>
-            <p>Date, Description, Amount, Type, Category</p>
-            <p className="mt-2">Example:</p>
-            <p className="font-mono">2024-01-15, Payment from Client ABC, 1500.00, CREDIT, Invoice Payment</p>
-            <p className="font-mono">2024-01-16, Supplier Payment, -500.00, DEBIT, Expenses</p>
+            <p className="font-medium mb-1">Supported format (bank export):</p>
+            <p>Date Received, Payment, Description, Money In, Money Out, …</p>
+            <p className="mt-2">Paste your online statement into a spreadsheet, save as CSV, then upload here. You can reconcile week by week: match payments received to invoices, wages to timesheets, and business expenses as needed.</p>
           </div>
           <div className="flex justify-end gap-2">
             <Button
