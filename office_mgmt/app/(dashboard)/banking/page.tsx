@@ -23,7 +23,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { getBankTransactions, deleteBankTransaction, unreconcileTransaction } from '@/app/actions/bank-transactions'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, formatCurrencyForCSV } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { Upload, Download, Check, X, ArrowDownIcon, ArrowUpIcon, Edit, Trash2, FileText, Calendar } from 'lucide-react'
 import { CSVImportDialog } from '@/components/banking/csv-import-dialog'
@@ -155,6 +155,38 @@ export default function BankingPage() {
     }
   }
 
+  const handleExportCSV = () => {
+    if (transactions.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'No data to export',
+        description: 'There are no transactions to export. Adjust filters or import data first.',
+      })
+      return
+    }
+    const escape = (v: string) => (v.includes(',') || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v)
+    const header = 'Date Received,Payment,Description,Money In,Money Out,Reconciled,Invoice,Notes'
+    const rows = transactions.map((t) => {
+      const date = formatDate(t.date)
+      const [payment, desc] = t.description.includes(' - ') ? t.description.split(' - ', 2) : [t.description, t.category ?? '']
+      const moneyIn = t.type === 'CREDIT' ? formatCurrencyForCSV(t.amount) : ''
+      const moneyOut = t.type === 'DEBIT' ? formatCurrencyForCSV(t.amount) : ''
+      const reconciled = t.reconciled ? 'Yes' : 'No'
+      const invoice = t.invoice?.invoiceNumber ?? ''
+      const notes = t.notes ?? ''
+      return [date, payment, desc, moneyIn, moneyOut, reconciled, invoice, notes].map(escape).join(',')
+    })
+    const csv = [header, ...rows].join('\r\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `bank-transactions-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast({ title: 'Exported', description: `${transactions.length} transaction(s) exported` })
+  }
+
   const stats = {
     totalIn: transactions.filter(t => t.type === 'CREDIT').reduce((sum, t) => sum + t.amount, 0),
     totalOut: transactions.filter(t => t.type === 'DEBIT').reduce((sum, t) => sum + Math.abs(t.amount), 0),
@@ -177,9 +209,9 @@ export default function BankingPage() {
             <Upload className="h-4 w-4 mr-2" />
             Import CSV
           </Button>
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleExportCSV}>
             <Download className="h-4 w-4 mr-2" />
-            Export
+            Export CSV
           </Button>
         </div>
       </div>
