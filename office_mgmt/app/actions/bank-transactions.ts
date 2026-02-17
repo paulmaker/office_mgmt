@@ -5,7 +5,7 @@ import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
 import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
-import type { TransactionType } from '@prisma/client'
+import type { Prisma, TransactionType } from '@prisma/client'
 import { requireModule } from '@/lib/module-access'
 
 /**
@@ -34,7 +34,7 @@ export async function getBankTransactions(filters?: {
     throw new Error('You do not have permission to view bank transactions')
   }
 
-  const where: any = { entityId }
+  const where: Prisma.BankTransactionWhereInput = { entityId }
 
   if (filters?.reconciled !== undefined) {
     where.reconciled = filters.reconciled
