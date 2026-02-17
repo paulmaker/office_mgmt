@@ -3,7 +3,6 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
 import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 import type { TransactionType } from '@prisma/client'
@@ -142,16 +141,12 @@ export async function createBankTransaction(data: {
     throw new Error('You do not have permission to create bank transactions')
   }
 
-  // Get user's entity
-  const userEntity = await getUserEntity(userId)
-  if (!userEntity) {
-    throw new Error('User entity not found')
-  }
+  const entityId = requireSessionEntityId(session)
 
   // Create transaction
   const transaction = await prisma.bankTransaction.create({
     data: {
-      entityId: userEntity.entityId,
+      entityId,
       date: data.date,
       description: data.description,
       amount: data.amount,
@@ -190,16 +185,12 @@ export async function importBankTransactionsFromCSV(
     throw new Error('You do not have permission to import bank transactions')
   }
 
-  // Get user's entity
-  const userEntity = await getUserEntity(userId)
-  if (!userEntity) {
-    throw new Error('User entity not found')
-  }
+  const entityId = requireSessionEntityId(session)
 
   // Create all transactions
   const transactions = await prisma.bankTransaction.createMany({
     data: csvData.map((row) => ({
-      entityId: userEntity.entityId,
+      entityId,
       date: new Date(row.date),
       description: row.description,
       amount: row.amount,
