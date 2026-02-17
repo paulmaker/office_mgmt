@@ -2,7 +2,6 @@
 
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
-import { putObject, deleteObject, getPresignedDownloadUrl } from '@/lib/s3'
 import { revalidatePath } from 'next/cache'
 import sharp from 'sharp'
 
@@ -13,8 +12,8 @@ const LOGO_MAX_HEIGHT = 200
 
 /**
  * Upload and optimize company logo.
- * Accepts a base64-encoded image, resizes/optimizes it, uploads to S3,
- * and stores the S3 key in the entity settings.
+ * The optimized image is stored as a base64 data URI directly
+ * in the entity settings JSON field (typically under 100KB).
  */
 export async function uploadLogo(formData: FormData) {
   const session = await auth()
@@ -54,11 +53,9 @@ export async function uploadLogo(formData: FormData) {
       .png({ quality: 90, compressionLevel: 9 })
       .toBuffer()
 
-    const key = `${entityId}/logo/company-logo.png`
+    const logoDataUri = `data:image/png;base64,${optimizedBuffer.toString('base64')}`
 
-    await putObject(key, optimizedBuffer, 'image/png')
-
-    // Get existing settings and update with the logo key
+    // Store directly in entity settings
     const entity = await prisma.entity.findUnique({
       where: { id: entityId },
       select: { settings: true },
@@ -71,13 +68,13 @@ export async function uploadLogo(formData: FormData) {
       data: {
         settings: {
           ...existingSettings,
-          logoS3Key: key,
+          logoDataUri,
         } as any,
       },
     })
 
     revalidatePath('/settings')
-    return { success: true, key }
+    return { success: true }
   } catch (error) {
     console.error('Logo upload error:', error)
     return { success: false, error: 'Failed to upload logo. Please try again.' }
@@ -85,7 +82,7 @@ export async function uploadLogo(formData: FormData) {
 }
 
 /**
- * Remove the company logo from S3 and entity settings.
+ * Remove the company logo from entity settings.
  */
 export async function removeLogo() {
   const session = await auth()
@@ -107,17 +104,7 @@ export async function removeLogo() {
     })
 
     const existingSettings = (entity?.settings as Record<string, unknown>) || {}
-    const logoKey = existingSettings.logoS3Key as string | undefined
-
-    if (logoKey) {
-      try {
-        await deleteObject(logoKey)
-      } catch {
-        // Object may not exist, continue to clear the setting
-      }
-    }
-
-    const { logoS3Key: _, ...settingsWithoutLogo } = existingSettings
+    const { logoDataUri: _, logoS3Key: __, ...settingsWithoutLogo } = existingSettings
 
     await prisma.entity.update({
       where: { id: entityId },
@@ -135,7 +122,7 @@ export async function removeLogo() {
 }
 
 /**
- * Get a presigned URL for the current entity's logo.
+ * Get the company logo as a data URI.
  * Returns null if no logo is set.
  */
 export async function getLogoUrl(): Promise<string | null> {
@@ -150,13 +137,5 @@ export async function getLogoUrl(): Promise<string | null> {
   })
 
   const settings = (entity?.settings as Record<string, unknown>) || {}
-  const logoKey = settings.logoS3Key as string | undefined
-
-  if (!logoKey) return null
-
-  try {
-    return await getPresignedDownloadUrl(logoKey)
-  } catch {
-    return null
-  }
+  return (settings.logoDataUri as string) || null
 }

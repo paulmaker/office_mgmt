@@ -4,24 +4,6 @@ import { NextResponse } from "next/server"
 import { renderToStream } from "@react-pdf/renderer"
 import { InvoicePDF } from "@/lib/invoice-pdf"
 import { requireSessionEntityId } from "@/lib/session-entity"
-import { getObjectBuffer } from "@/lib/s3"
-
-/**
- * Build a base64 data URI from an S3-stored logo.
- * Returns undefined if no logo key is configured or the fetch fails.
- */
-async function getLogoDataUri(settings: Record<string, unknown> | null): Promise<string | undefined> {
-  const logoKey = (settings as Record<string, unknown> | null)?.logoS3Key as string | undefined
-  if (!logoKey) return undefined
-
-  try {
-    const buffer = await getObjectBuffer(logoKey)
-    return `data:image/png;base64,${buffer.toString('base64')}`
-  } catch (error) {
-    console.error('Failed to fetch logo from S3:', error)
-    return undefined
-  }
-}
 
 export async function GET(
   request: Request,
@@ -58,7 +40,8 @@ export async function GET(
       return new NextResponse("Not found", { status: 404 })
     }
 
-    const logoSrc = await getLogoDataUri(invoice.entity.settings as Record<string, unknown> | null)
+    const entitySettings = invoice.entity.settings as Record<string, unknown> | null
+    const logoSrc = (entitySettings?.logoDataUri as string) || undefined
 
     const stream = await renderToStream(
       // @ts-ignore

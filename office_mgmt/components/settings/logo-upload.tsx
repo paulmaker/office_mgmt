@@ -70,7 +70,7 @@ export function LogoUpload() {
         throw new Error(result.error)
       }
 
-      // Reload the logo URL after successful upload
+      // Reload the logo after successful upload
       const url = await getLogoUrl()
       setLogoUrl(url)
 
