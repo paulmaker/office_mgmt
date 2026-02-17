@@ -255,7 +255,7 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
             <option value="">Select a client</option>
             {clients.map((client) => (
               <option key={client.id} value={client.id}>
-                {client.companyName || client.name}
+                {client.name}
               </option>
             ))}
           </select>

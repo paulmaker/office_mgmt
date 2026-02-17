@@ -250,7 +250,7 @@ export default function JobPricesPage() {
                   <option value="">All Clients</option>
                   {clients.map((client) => (
                     <option key={client.id} value={client.id}>
-                      {client.companyName || client.name}
+                      {client.name}
                     </option>
                   ))}
                 </select>
@@ -286,7 +286,7 @@ export default function JobPricesPage() {
                 filteredJobPrices.map((jobPrice) => (
                   <TableRow key={jobPrice.id}>
                     <TableCell className="font-medium">
-                      {jobPrice.client.companyName || jobPrice.client.name}
+                      {jobPrice.client.name}
                     </TableCell>
                     <TableCell>{jobPrice.jobType}</TableCell>
                     <TableCell className="max-w-xs truncate">{jobPrice.description}</TableCell>

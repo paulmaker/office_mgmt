@@ -320,7 +320,7 @@ export default function JobsPage() {
                   <TableRow key={job.id}>
                     <TableCell className="font-medium">{job.jobNumber}</TableCell>
                     <TableCell>
-                      {job.client.companyName || job.client.name}
+                      {job.client.name}
                     </TableCell>
                     <TableCell className="max-w-xs truncate">{job.jobDescription}</TableCell>
                     <TableCell className="text-gray-500">
