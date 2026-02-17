@@ -3,7 +3,6 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
 import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 import type { JobStatus } from '@prisma/client'
@@ -156,10 +155,6 @@ export async function createJob(data: {
     const canCreate = await hasPermission(userId, 'jobs', 'create')
     if (!canCreate) return { success: false, error: 'You do not have permission to create jobs' }
 
-    const userEntity = await getUserEntity(userId)
-    if (!userEntity) return { success: false, error: 'User entity not found' }
-
-    // Get all accessible entity IDs for this user
     const entityId = requireSessionEntityId(session)
 
     const client = await prisma.client.findUnique({ where: { id: data.clientId } })

@@ -3,7 +3,6 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
 import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 import type { CISStatus, PaymentType } from '@prisma/client'
@@ -99,17 +98,16 @@ export async function createSubcontractor(data: {
     const canCreate = await hasPermission(userId, 'subcontractors', 'create')
     if (!canCreate) return { success: false, error: 'You do not have permission to create subcontractors' }
 
-    const userEntity = await getUserEntity(userId)
-    if (!userEntity) return { success: false, error: 'User entity not found' }
+    const entityId = requireSessionEntityId(session)
 
     const existing = await prisma.subcontractor.findFirst({
-      where: { entityId: userEntity.entityId, email: data.email },
+      where: { entityId, email: data.email },
     })
     if (existing) return { success: false, error: 'A subcontractor with this email already exists' }
 
     const subcontractor = await prisma.subcontractor.create({
       data: {
-        entityId: userEntity.entityId,
+        entityId,
         name: data.name,
         email: data.email,
         phone: data.phone,

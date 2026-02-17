@@ -3,7 +3,6 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
 import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 import type { AssetType } from '@prisma/client'
@@ -129,12 +128,11 @@ export async function createAsset(data: {
     const canCreate = await hasPermission(userId, 'assets', 'create')
     if (!canCreate) return { success: false, error: 'You do not have permission to create assets' }
 
-    const userEntity = await getUserEntity(userId)
-    if (!userEntity) return { success: false, error: 'User entity not found' }
+    const entityId = requireSessionEntityId(session)
 
     const asset = await prisma.companyAsset.create({
       data: {
-        entityId: userEntity.entityId,
+        entityId,
         type: data.type,
         name: data.name,
         registrationNumber: data.registrationNumber,

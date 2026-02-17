@@ -3,7 +3,6 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
 import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 
@@ -89,26 +88,25 @@ export async function createEmployee(data: {
     const canCreate = await hasPermission(userId, 'employees', 'create')
     if (!canCreate) return { success: false, error: 'You do not have permission to create employees' }
 
-    const userEntity = await getUserEntity(userId)
-    if (!userEntity) return { success: false, error: 'User entity not found' }
+    const entityId = requireSessionEntityId(session)
 
     if (data.email) {
       const existing = await prisma.employee.findFirst({
-        where: { entityId: userEntity.entityId, email: data.email },
+        where: { entityId, email: data.email },
       })
       if (existing) return { success: false, error: 'An employee with this email already exists' }
     }
 
     if (data.employeeId) {
       const existing = await prisma.employee.findFirst({
-        where: { entityId: userEntity.entityId, employeeId: data.employeeId },
+        where: { entityId, employeeId: data.employeeId },
       })
       if (existing) return { success: false, error: 'An employee with this employee ID already exists' }
     }
 
     const employee = await prisma.employee.create({
       data: {
-        entityId: userEntity.entityId,
+        entityId,
         name: data.name,
         email: data.email,
         phone: data.phone,

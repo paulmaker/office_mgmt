@@ -2,7 +2,6 @@
 
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
-import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
 
 /**
  * Generate invoice number for a client

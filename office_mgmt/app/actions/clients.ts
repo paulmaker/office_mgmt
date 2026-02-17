@@ -4,7 +4,6 @@ import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
 import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 import { generateReferenceCode } from '@/lib/utils'
@@ -111,11 +110,7 @@ export async function createClient(data: {
       return { success: false, error: 'You do not have permission to create clients' }
     }
 
-    // Get user's entity
-    const userEntity = await getUserEntity(userId)
-    if (!userEntity) {
-      return { success: false, error: 'User entity not found' }
-    }
+    const entityId = requireSessionEntityId(session)
 
   // Auto-generate reference code if not provided, or validate if provided
   let referenceCode = data.referenceCode?.toUpperCase().trim()
@@ -130,7 +125,7 @@ export async function createClient(data: {
     while (attempts < 26) {
       const existing = await prisma.client.findFirst({
         where: {
-          entityId: userEntity.entityId,
+          entityId,
           referenceCode: finalCode,
         },
       })
@@ -159,7 +154,7 @@ export async function createClient(data: {
     // Check if provided reference code is unique
     const existing = await prisma.client.findFirst({
       where: {
-        entityId: userEntity.entityId,
+        entityId,
         referenceCode: referenceCode,
       },
     })
@@ -169,10 +164,10 @@ export async function createClient(data: {
     }
   }
 
-    // Create client scoped to user's entity
+    // Create client scoped to session entity
     const client = await prisma.client.create({
       data: {
-        entityId: userEntity.entityId,
+        entityId,
         name: data.name,
         companyName: data.companyName,
         email: data.email,

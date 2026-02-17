@@ -3,7 +3,6 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { hasPermission } from '@/lib/platform-core/rbac'
-import { getUserEntity } from '@/lib/platform-core/multi-tenancy'
 import { requireSessionEntityId } from '@/lib/session-entity'
 import { revalidatePath } from 'next/cache'
 
@@ -93,12 +92,11 @@ export async function createSupplier(data: {
     const canCreate = await hasPermission(userId, 'suppliers', 'create')
     if (!canCreate) return { success: false, error: 'You do not have permission to create suppliers' }
 
-    const userEntity = await getUserEntity(userId)
-    if (!userEntity) return { success: false, error: 'User entity not found' }
+    const entityId = requireSessionEntityId(session)
 
     const supplier = await prisma.supplier.create({
       data: {
-        entityId: userEntity.entityId,
+        entityId,
         name: data.name,
         companyName: data.companyName,
         email: data.email,
