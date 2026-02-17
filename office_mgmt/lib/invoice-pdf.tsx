@@ -129,12 +129,35 @@ const styles = StyleSheet.create({
     bottom: 30,
     left: 30,
     right: 30,
-    textAlign: 'center',
-    color: '#9CA3AF',
-    fontSize: 8,
     borderTopWidth: 1,
     borderTopColor: '#EEEEEE',
     paddingTop: 10,
+  },
+  footerColumns: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  footerSection: {
+    flexDirection: 'column',
+    maxWidth: '48%',
+  },
+  footerLabel: {
+    fontSize: 7,
+    fontWeight: 'bold',
+    color: '#6B7280',
+    marginBottom: 3,
+    textTransform: 'uppercase',
+  },
+  footerText: {
+    fontSize: 7,
+    color: '#4B5563',
+    lineHeight: 1.4,
+  },
+  footerThankYou: {
+    textAlign: 'center',
+    color: '#9CA3AF',
+    fontSize: 8,
+    marginTop: 8,
   }
 })
 
@@ -142,9 +165,11 @@ interface InvoicePDFProps {
   invoice: any // Using any for simplicity with complex Prisma types, ideally define strict interface
   entity: any
   logoSrc?: string // Base64 data URI or presigned URL for the company logo
+  invoicePaymentInfo?: string
+  invoiceCompanyInfo?: string
 }
 
-export const InvoicePDF = ({ invoice, entity, logoSrc }: InvoicePDFProps) => (
+export const InvoicePDF = ({ invoice, entity, logoSrc, invoicePaymentInfo, invoiceCompanyInfo }: InvoicePDFProps) => (
   <Document>
     <Page size="A4" style={styles.page}>
       {/* Header */}
@@ -250,8 +275,28 @@ export const InvoicePDF = ({ invoice, entity, logoSrc }: InvoicePDFProps) => (
 
       {/* Footer */}
       <View style={styles.footer}>
-        <Text>Thank you for your business</Text>
-        {invoice.notes && <Text style={{ marginTop: 5 }}>{invoice.notes}</Text>}
+        {(invoicePaymentInfo || invoiceCompanyInfo) && (
+          <View style={styles.footerColumns}>
+            {invoicePaymentInfo && (
+              <View style={styles.footerSection}>
+                <Text style={styles.footerLabel}>Payment Information</Text>
+                {invoicePaymentInfo.split('\n').map((line, i) => (
+                  <Text key={i} style={styles.footerText}>{line}</Text>
+                ))}
+              </View>
+            )}
+            {invoiceCompanyInfo && (
+              <View style={styles.footerSection}>
+                <Text style={styles.footerLabel}>Company Information</Text>
+                {invoiceCompanyInfo.split('\n').map((line, i) => (
+                  <Text key={i} style={styles.footerText}>{line}</Text>
+                ))}
+              </View>
+            )}
+          </View>
+        )}
+        <Text style={styles.footerThankYou}>Thank you for your business</Text>
+        {invoice.notes && <Text style={[styles.footerThankYou, { marginTop: 2 }]}>{invoice.notes}</Text>}
       </View>
     </Page>
   </Document>

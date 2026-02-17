@@ -6,10 +6,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Save, Building2, Users, Bell, Database, Mail, Loader2 } from 'lucide-react'
+import { Save, Building2, Users, Bell, Database, Mail, Loader2, FileText } from 'lucide-react'
 import { getSettings, updateSettings, type SettingsFormData } from '@/app/actions/settings'
 import { useToast } from '@/hooks/use-toast'
 import { useForm } from 'react-hook-form'
+import { Textarea } from '@/components/ui/textarea'
 import { LogoUpload } from '@/components/settings/logo-upload'
 
 export default function SettingsPage() {
@@ -122,6 +123,47 @@ export default function SettingsPage() {
 
         {/* Company Logo */}
         <LogoUpload />
+
+        {/* Invoice Footer Text */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Invoice Footer
+            </CardTitle>
+            <CardDescription>
+              Add payment details and company information to the bottom of sales invoices
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="invoicePaymentInfo">Payment Information</Label>
+                <Textarea
+                  id="invoicePaymentInfo"
+                  {...register('invoicePaymentInfo')}
+                  rows={6}
+                  placeholder={"Please make cheques payable to...\nBank Details:\nAccount No: ...\nSort Code: ...\nPayment Terms: Within 14 days"}
+                />
+                <p className="text-xs text-gray-500">
+                  Bank details, payment methods, and terms
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invoiceCompanyInfo">Company Information</Label>
+                <Textarea
+                  id="invoiceCompanyInfo"
+                  {...register('invoiceCompanyInfo')}
+                  rows={6}
+                  placeholder={"VAT Reg: ...\nUTR No: ...\nCompany Registration No: ..."}
+                />
+                <p className="text-xs text-gray-500">
+                  VAT, UTR, company registration, and other legal details
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Email Configuration */}
         <Card>

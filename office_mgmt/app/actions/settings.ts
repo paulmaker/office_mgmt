@@ -26,6 +26,10 @@ const settingsSchema = z.object({
   vatReducedRate: z.coerce.number().default(5),
   isVatRegistered: z.boolean().default(false),
   
+  // Invoice Footer
+  invoicePaymentInfo: z.string().optional(),
+  invoiceCompanyInfo: z.string().optional(),
+
   // Notifications
   notifyInvoiceOverdue: z.boolean().default(true),
   notifyTimesheetSubmission: z.boolean().default(true),
@@ -66,6 +70,8 @@ export async function getSettings() {
     vatStandardRate: 20,
     vatReducedRate: 5,
     isVatRegistered: false,
+    invoicePaymentInfo: '',
+    invoiceCompanyInfo: '',
     notifyInvoiceOverdue: true,
     notifyTimesheetSubmission: true,
     notifyVehicleReminders: true,
@@ -129,12 +135,13 @@ export async function updateSettings(data: SettingsFormData) {
     select: { settings: true }
   })
 
-  const existingSettings = (existingEntity?.settings as { enabledModules?: string[] }) || {}
+  const existingSettings = (existingEntity?.settings as Record<string, unknown>) || {}
 
-  // Merge validated settings with existing enabledModules
+  // Merge validated settings with fields managed outside the settings form
   const mergedSettings = {
     ...validated,
     enabledModules: existingSettings.enabledModules, // Preserve module settings
+    logoDataUri: existingSettings.logoDataUri, // Preserve logo (managed by logo upload)
   }
 
   await prisma.entity.update({

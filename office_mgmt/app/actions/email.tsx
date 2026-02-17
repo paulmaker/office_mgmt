@@ -52,14 +52,22 @@ export async function sendInvoiceEmail(invoiceId: string) {
       throw new Error("Client has no email address (add a primary email or invoice emails with Send invoices ticked)")
     }
 
-    // Get company logo from entity settings
+    // Get company logo and footer text from entity settings
     const entitySettings = invoice.entity.settings as Record<string, unknown> | null
     const logoSrc = (entitySettings?.logoDataUri as string) || undefined
+    const invoicePaymentInfo = (entitySettings?.invoicePaymentInfo as string) || undefined
+    const invoiceCompanyInfo = (entitySettings?.invoiceCompanyInfo as string) || undefined
 
     // Generate PDF once
     const pdfBuffer = await renderToBuffer(
       // @ts-ignore - InvoicePDF props are loose for now
-      <InvoicePDF invoice={invoice} entity={invoice.entity} logoSrc={logoSrc} />
+      <InvoicePDF
+        invoice={invoice}
+        entity={invoice.entity}
+        logoSrc={logoSrc}
+        invoicePaymentInfo={invoicePaymentInfo}
+        invoiceCompanyInfo={invoiceCompanyInfo}
+      />
     )
 
     const subject = `Invoice #${invoice.invoiceNumber} from ${invoice.entity.name}`

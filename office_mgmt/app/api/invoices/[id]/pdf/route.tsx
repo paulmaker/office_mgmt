@@ -42,10 +42,18 @@ export async function GET(
 
     const entitySettings = invoice.entity.settings as Record<string, unknown> | null
     const logoSrc = (entitySettings?.logoDataUri as string) || undefined
+    const invoicePaymentInfo = (entitySettings?.invoicePaymentInfo as string) || undefined
+    const invoiceCompanyInfo = (entitySettings?.invoiceCompanyInfo as string) || undefined
 
     const stream = await renderToStream(
       // @ts-ignore
-      <InvoicePDF invoice={invoice} entity={invoice.entity} logoSrc={logoSrc} />
+      <InvoicePDF
+        invoice={invoice}
+        entity={invoice.entity}
+        logoSrc={logoSrc}
+        invoicePaymentInfo={invoicePaymentInfo}
+        invoiceCompanyInfo={invoiceCompanyInfo}
+      />
     )
 
     const url = new URL(request.url)
