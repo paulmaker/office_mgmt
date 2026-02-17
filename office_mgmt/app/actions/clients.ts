@@ -188,7 +188,7 @@ export async function createClient(data: {
     // Create InvoiceCode record with full reference code as prefix
     await prisma.invoiceCode.create({
       data: {
-        entityId: userEntity.entityId,
+        entityId,
         clientId: client.id,
         prefix: referenceCode, // Use full reference code (e.g., CC1, BS12)
         lastNumber: 0,
