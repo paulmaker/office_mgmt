@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer'
+import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer'
 import { format } from 'date-fns'
 import { formatCurrency } from '@/lib/utils'
 
@@ -18,6 +18,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#EEEEEE',
     paddingBottom: 10,
+  },
+  logo: {
+    maxWidth: 160,
+    maxHeight: 80,
+    marginBottom: 8,
   },
   title: {
     fontSize: 24,
@@ -136,15 +141,20 @@ const styles = StyleSheet.create({
 interface InvoicePDFProps {
   invoice: any // Using any for simplicity with complex Prisma types, ideally define strict interface
   entity: any
+  logoSrc?: string // Base64 data URI or presigned URL for the company logo
 }
 
-export const InvoicePDF = ({ invoice, entity }: InvoicePDFProps) => (
+export const InvoicePDF = ({ invoice, entity, logoSrc }: InvoicePDFProps) => (
   <Document>
     <Page size="A4" style={styles.page}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.row}>
           <View style={styles.column}>
+            {logoSrc && (
+              // @ts-ignore - react-pdf Image src type
+              <Image src={logoSrc} style={styles.logo} />
+            )}
             <Text style={styles.title}>{entity.name}</Text>
             {entity.tenantAccount?.name && (
               <Text style={styles.subtitle}>{entity.tenantAccount.name}</Text>

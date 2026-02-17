@@ -6,6 +6,7 @@ import { resend, EMAIL_FROM } from "@/lib/email"
 import { renderToBuffer } from "@react-pdf/renderer"
 import { InvoicePDF } from "@/lib/invoice-pdf"
 import { formatCurrency } from "@/lib/utils"
+import { getObjectBuffer } from "@/lib/s3"
 
 function getInvoiceRecipients(client: { email: string; invoiceEmails?: unknown }): string[] {
   const raw = client.invoiceEmails
@@ -52,10 +53,23 @@ export async function sendInvoiceEmail(invoiceId: string) {
       throw new Error("Client has no email address (add a primary email or invoice emails with Send invoices ticked)")
     }
 
+    // Fetch company logo from S3 if configured
+    let logoSrc: string | undefined
+    const entitySettings = invoice.entity.settings as Record<string, unknown> | null
+    const logoKey = entitySettings?.logoS3Key as string | undefined
+    if (logoKey) {
+      try {
+        const logoBuffer = await getObjectBuffer(logoKey)
+        logoSrc = `data:image/png;base64,${logoBuffer.toString('base64')}`
+      } catch (error) {
+        console.error('Failed to fetch logo for email PDF:', error)
+      }
+    }
+
     // Generate PDF once
     const pdfBuffer = await renderToBuffer(
       // @ts-ignore - InvoicePDF props are loose for now
-      <InvoicePDF invoice={invoice} entity={invoice.entity} />
+      <InvoicePDF invoice={invoice} entity={invoice.entity} logoSrc={logoSrc} />
     )
 
     const subject = `Invoice #${invoice.invoiceNumber} from ${invoice.entity.name}`

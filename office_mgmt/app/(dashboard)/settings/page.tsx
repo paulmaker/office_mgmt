@@ -10,6 +10,7 @@ import { Save, Building2, Users, Bell, Database, Mail, Loader2 } from 'lucide-re
 import { getSettings, updateSettings, type SettingsFormData } from '@/app/actions/settings'
 import { useToast } from '@/hooks/use-toast'
 import { useForm } from 'react-hook-form'
+import { LogoUpload } from '@/components/settings/logo-upload'
 
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true)
@@ -118,6 +119,9 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Company Logo */}
+        <LogoUpload />
 
         {/* Email Configuration */}
         <Card>
