@@ -34,6 +34,9 @@ import { JobForm } from '@/components/jobs/job-form'
 import { getJobs, deleteJob, getJob, sendJobSheetEmail } from '@/app/actions/jobs'
 import { formatCurrency, formatDate, getJobStatusColor } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
+import { SortableHeader } from '@/components/ui/sortable-header'
+import { DateRangeFilter } from '@/components/ui/date-range-filter'
+import { sortData, filterByDateRange, toggleSort, type SortConfig } from '@/lib/sort-utils'
 import { Plus, Search, Edit, Trash2, CheckCircle2, XCircle, Users, Mail } from 'lucide-react'
 import type { Job } from '@prisma/client'
 
@@ -47,6 +50,9 @@ type JobWithRelations = Job & {
 export default function JobsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [activeTab, setActiveTab] = useState('all')
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>({ column: 'dateWorkCommenced', direction: 'desc' })
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [jobs, setJobs] = useState<JobWithRelations[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -169,20 +175,37 @@ export default function JobsPage() {
     loadJobs()
   }
 
-  const filteredJobs = jobs.filter(job => {
-    const matchesSearch =
-      job.jobNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job.jobDescription.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job.client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job.client.companyName?.toLowerCase().includes(searchTerm.toLowerCase())
+  const handleSort = (column: string) => setSortConfig(prev => toggleSort(prev, column))
 
-    if (activeTab === 'all') return matchesSearch
-    if (activeTab === 'pending') return matchesSearch && job.status === 'PENDING'
-    if (activeTab === 'in_progress') return matchesSearch && job.status === 'IN_PROGRESS'
-    if (activeTab === 'complete') return matchesSearch && job.status === 'COMPLETE'
+  const filteredJobs = (() => {
+    let result = jobs.filter(job => {
+      const matchesSearch =
+        job.jobNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        job.jobDescription.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        job.client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        job.client.companyName?.toLowerCase().includes(searchTerm.toLowerCase())
 
-    return matchesSearch
-  })
+      if (activeTab === 'all') return matchesSearch
+      if (activeTab === 'pending') return matchesSearch && job.status === 'PENDING'
+      if (activeTab === 'in_progress') return matchesSearch && job.status === 'IN_PROGRESS'
+      if (activeTab === 'complete') return matchesSearch && job.status === 'COMPLETE'
+
+      return matchesSearch
+    })
+
+    result = filterByDateRange(result, j => j.dateWorkCommenced, dateFrom, dateTo)
+
+    return sortData(result, sortConfig, (item, col) => {
+      switch (col) {
+        case 'jobNumber': return item.jobNumber
+        case 'client': return item.client.name
+        case 'dateWorkCommenced': return new Date(item.dateWorkCommenced)
+        case 'price': return item.price
+        case 'status': return item.status
+        default: return null
+      }
+    })
+  })()
 
   const stats = {
     total: jobs.length,
@@ -275,8 +298,8 @@ export default function JobsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-4">
-            <div className="relative">
+          <div className="mb-4 flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Input
                 placeholder="Search jobs by number or description..."
@@ -285,19 +308,26 @@ export default function JobsPage() {
                 className="pl-10"
               />
             </div>
+            <DateRangeFilter
+              from={dateFrom}
+              to={dateTo}
+              onFromChange={setDateFrom}
+              onToChange={setDateTo}
+              onClear={() => { setDateFrom(''); setDateTo('') }}
+            />
           </div>
 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Job Number</TableHead>
-                <TableHead>Client</TableHead>
+                <SortableHeader column="jobNumber" label="Job Number" sortConfig={sortConfig} onSort={handleSort} />
+                <SortableHeader column="client" label="Client" sortConfig={sortConfig} onSort={handleSort} />
                 <TableHead>Job Description</TableHead>
-                <TableHead>Date Commenced</TableHead>
-                <TableHead>Price</TableHead>
+                <SortableHeader column="dateWorkCommenced" label="Date Commenced" sortConfig={sortConfig} onSort={handleSort} />
+                <SortableHeader column="price" label="Price" sortConfig={sortConfig} onSort={handleSort} />
                 <TableHead>Workers</TableHead>
                 <TableHead>Line Items</TableHead>
-                <TableHead>Status</TableHead>
+                <SortableHeader column="status" label="Status" sortConfig={sortConfig} onSort={handleSort} />
                 <TableHead>Invoice Paid</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>

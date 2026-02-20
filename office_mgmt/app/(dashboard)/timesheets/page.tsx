@@ -34,6 +34,9 @@ import { getTimesheets, deleteTimesheet, approveTimesheet, rejectTimesheet, mark
 import { sendTimesheetEmail } from '@/app/actions/email'
 import { formatCurrency, formatDate, getTimesheetStatusColor } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
+import { SortableHeader } from '@/components/ui/sortable-header'
+import { DateRangeFilter } from '@/components/ui/date-range-filter'
+import { sortData, filterByDateRange, toggleSort, type SortConfig } from '@/lib/sort-utils'
 import { Plus, Search, Check, X, Download, Edit, Trash2, Banknote, Mail } from 'lucide-react'
 import type { Timesheet } from '@prisma/client'
 
@@ -48,6 +51,9 @@ type TimesheetWithRelations = Timesheet & {
 
 export default function TimesheetsPage() {
   const [searchTerm, setSearchTerm] = useState('')
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>({ column: 'submittedDate', direction: 'desc' })
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [timesheets, setTimesheets] = useState<TimesheetWithRelations[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -328,13 +334,32 @@ export default function TimesheetsPage() {
     URL.revokeObjectURL(url)
   }
 
-  const filteredTimesheets = timesheets.filter(timesheet => {
-    const subName = timesheet.subcontractor?.name.toLowerCase() || ''
-    return (
-      subName.includes(searchTerm.toLowerCase()) ||
-      timesheet.notes?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-  })
+  const handleSort = (column: string) => setSortConfig(prev => toggleSort(prev, column))
+
+  const filteredTimesheets = (() => {
+    let result = timesheets.filter(timesheet => {
+      const subName = timesheet.subcontractor?.name.toLowerCase() || ''
+      return (
+        subName.includes(searchTerm.toLowerCase()) ||
+        timesheet.notes?.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    })
+
+    result = filterByDateRange(result, t => t.submittedDate ?? t.periodStart, dateFrom, dateTo)
+
+    return sortData(result, sortConfig, (item, col) => {
+      switch (col) {
+        case 'subcontractor': return item.subcontractor?.name ?? ''
+        case 'submittedDate': return item.submittedDate ? new Date(item.submittedDate) : new Date(item.periodStart)
+        case 'grossAmount': return item.grossAmount
+        case 'expenses': return item.expenses
+        case 'cisDeduction': return item.cisDeduction
+        case 'netAmount': return item.netAmount
+        case 'status': return item.status
+        default: return null
+      }
+    })
+  })()
 
   const stats = {
     total: timesheets.length,
@@ -419,8 +444,8 @@ export default function TimesheetsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-4">
-            <div className="relative">
+          <div className="mb-4 flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Input
                 placeholder="Search timesheets..."
@@ -429,20 +454,27 @@ export default function TimesheetsPage() {
                 className="pl-10"
               />
             </div>
+            <DateRangeFilter
+              from={dateFrom}
+              to={dateTo}
+              onFromChange={setDateFrom}
+              onToChange={setDateTo}
+              onClear={() => { setDateFrom(''); setDateTo('') }}
+            />
           </div>
 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Subcontractor</TableHead>
-                <TableHead>Submitted</TableHead>
+                <SortableHeader column="subcontractor" label="Subcontractor" sortConfig={sortConfig} onSort={handleSort} />
+                <SortableHeader column="submittedDate" label="Submitted" sortConfig={sortConfig} onSort={handleSort} />
                 <TableHead>Time</TableHead>
                 <TableHead>Rate</TableHead>
-                <TableHead>Gross</TableHead>
-                <TableHead>Expenses</TableHead>
-                <TableHead>CIS</TableHead>
-                <TableHead>Net Pay</TableHead>
-                <TableHead>Status</TableHead>
+                <SortableHeader column="grossAmount" label="Gross" sortConfig={sortConfig} onSort={handleSort} />
+                <SortableHeader column="expenses" label="Expenses" sortConfig={sortConfig} onSort={handleSort} />
+                <SortableHeader column="cisDeduction" label="CIS" sortConfig={sortConfig} onSort={handleSort} />
+                <SortableHeader column="netAmount" label="Net Pay" sortConfig={sortConfig} onSort={handleSort} />
+                <SortableHeader column="status" label="Status" sortConfig={sortConfig} onSort={handleSort} />
                 <TableHead className="w-0 text-right" />
               </TableRow>
             </TableHeader>

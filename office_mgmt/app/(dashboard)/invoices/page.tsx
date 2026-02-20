@@ -35,6 +35,9 @@ import { getInvoices, deleteInvoice, getInvoice } from '@/app/actions/invoices'
 import { sendInvoiceEmail } from '@/app/actions/email'
 import { formatCurrency, formatDate, getInvoiceStatusColor } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
+import { SortableHeader } from '@/components/ui/sortable-header'
+import { DateRangeFilter } from '@/components/ui/date-range-filter'
+import { sortData, filterByDateRange, toggleSort, type SortConfig } from '@/lib/sort-utils'
 import { Plus, Search, Download, Eye, Mail, Edit, Trash2, Loader2 } from 'lucide-react'
 import type { Invoice } from '@prisma/client'
 
@@ -59,6 +62,9 @@ type InvoiceWithRelations = Invoice & {
 export default function InvoicesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [activeTab, setActiveTab] = useState('all')
+  const [sortConfig, setSortConfig] = useState<SortConfig | null>({ column: 'date', direction: 'desc' })
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [invoices, setInvoices] = useState<InvoiceWithRelations[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
@@ -183,24 +189,42 @@ export default function InvoicesPage() {
     loadInvoices()
   }
 
-  const filteredInvoices = invoices.filter(invoice => {
-    const matchesSearch =
-      invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.notes?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (invoice as any).description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (invoice as any).purchaseOrderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.client?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.client?.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.subcontractor?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.supplier?.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const handleSort = (column: string) => setSortConfig(prev => toggleSort(prev, column))
 
-    if (activeTab === 'all') return matchesSearch
-    if (activeTab === 'sales') return matchesSearch && invoice.type === 'SALES'
-    if (activeTab === 'purchase') return matchesSearch && invoice.type === 'PURCHASE'
-    if (activeTab === 'overdue') return matchesSearch && invoice.status === 'OVERDUE'
+  const filteredInvoices = (() => {
+    let result = invoices.filter(invoice => {
+      const matchesSearch =
+        invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        invoice.notes?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (invoice as any).description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (invoice as any).purchaseOrderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        invoice.client?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        invoice.client?.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        invoice.subcontractor?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        invoice.supplier?.name.toLowerCase().includes(searchTerm.toLowerCase())
 
-    return matchesSearch
-  })
+      if (activeTab === 'all') return matchesSearch
+      if (activeTab === 'sales') return matchesSearch && invoice.type === 'SALES'
+      if (activeTab === 'purchase') return matchesSearch && invoice.type === 'PURCHASE'
+      if (activeTab === 'overdue') return matchesSearch && invoice.status === 'OVERDUE'
+
+      return matchesSearch
+    })
+
+    result = filterByDateRange(result, i => i.date, dateFrom, dateTo)
+
+    return sortData(result, sortConfig, (item, col) => {
+      switch (col) {
+        case 'invoiceNumber': return item.invoiceNumber
+        case 'date': return new Date(item.date)
+        case 'dueDate': return new Date(item.dueDate)
+        case 'total': return item.total
+        case 'outstanding': return (item as any).outstandingAmount ?? (item.total - ((item as any).paidAmount ?? 0))
+        case 'status': return item.status
+        default: return null
+      }
+    })
+  })()
 
   const getClientName = (invoice: InvoiceWithRelations) => {
     if (invoice.client) {
@@ -315,8 +339,8 @@ export default function InvoicesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="mb-4">
-            <div className="relative">
+          <div className="mb-4 flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <Input
                 placeholder="Search invoices..."
@@ -325,20 +349,27 @@ export default function InvoicesPage() {
                 className="pl-10"
               />
             </div>
+            <DateRangeFilter
+              from={dateFrom}
+              to={dateTo}
+              onFromChange={setDateFrom}
+              onToChange={setDateTo}
+              onClear={() => { setDateFrom(''); setDateTo('') }}
+            />
           </div>
 
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Invoice #</TableHead>
+                <SortableHeader column="invoiceNumber" label="Invoice #" sortConfig={sortConfig} onSort={handleSort} />
                 <TableHead>Type</TableHead>
                 <TableHead>Client/Supplier</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Due Date</TableHead>
+                <SortableHeader column="date" label="Date" sortConfig={sortConfig} onSort={handleSort} />
+                <SortableHeader column="dueDate" label="Due Date" sortConfig={sortConfig} onSort={handleSort} />
                 <TableHead>PO Number</TableHead>
-                <TableHead>Total</TableHead>
-                <TableHead>Outstanding</TableHead>
-                <TableHead>Status</TableHead>
+                <SortableHeader column="total" label="Total" sortConfig={sortConfig} onSort={handleSort} />
+                <SortableHeader column="outstanding" label="Outstanding" sortConfig={sortConfig} onSort={handleSort} />
+                <SortableHeader column="status" label="Status" sortConfig={sortConfig} onSort={handleSort} />
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
