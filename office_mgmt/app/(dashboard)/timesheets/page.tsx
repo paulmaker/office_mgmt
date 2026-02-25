@@ -62,6 +62,11 @@ export default function TimesheetsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [timesheetToDelete, setTimesheetToDelete] = useState<TimesheetWithRelations | null>(null)
   const [sendingEmailId, setSendingEmailId] = useState<string | null>(null)
+  const [pendingAction, setPendingAction] = useState<{
+    type: 'approve' | 'reject' | 'markAsPaid' | 'email'
+    timesheet: TimesheetWithRelations
+  } | null>(null)
+  const [actionLoading, setActionLoading] = useState(false)
   const { toast } = useToast()
 
   const loadTimesheets = useCallback(async () => {
@@ -133,77 +138,62 @@ export default function TimesheetsPage() {
     }
   }
 
-  const handleApprove = async (id: string) => {
-    try {
-      await approveTimesheet(id)
-      await loadTimesheets()
-      toast({
-        variant: 'success',
-        title: 'Timesheet approved',
-        description: 'Timesheet has been approved and is ready for processing.',
-      })
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to approve timesheet',
-      })
-    }
+  const handleApprove = (timesheet: TimesheetWithRelations) => {
+    setPendingAction({ type: 'approve', timesheet })
   }
 
-  const handleReject = async (id: string) => {
-    try {
-      await rejectTimesheet(id, 'Rejected by user')
-      await loadTimesheets()
-      toast({
-        variant: 'success',
-        title: 'Timesheet rejected',
-        description: 'Timesheet has been rejected.',
-      })
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to reject timesheet',
-      })
-    }
+  const handleReject = (timesheet: TimesheetWithRelations) => {
+    setPendingAction({ type: 'reject', timesheet })
   }
 
-  const handleMarkAsPaid = async (id: string) => {
-    try {
-      await markTimesheetAsPaid(id)
-      await loadTimesheets()
-      toast({
-        variant: 'success',
-        title: 'Timesheet marked as paid',
-        description: 'Timesheet has been marked as paid.',
-      })
-    } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to mark timesheet as paid',
-      })
-    }
+  const handleMarkAsPaid = (timesheet: TimesheetWithRelations) => {
+    setPendingAction({ type: 'markAsPaid', timesheet })
   }
 
-  const handleEmailTimesheet = async (id: string) => {
+  const handleEmailTimesheet = (timesheet: TimesheetWithRelations) => {
+    setPendingAction({ type: 'email', timesheet })
+  }
+
+  const confirmAction = async () => {
+    if (!pendingAction) return
+    const { type, timesheet } = pendingAction
     try {
-      setSendingEmailId(id)
-      await sendTimesheetEmail(id)
-      toast({
-        variant: 'success',
-        title: 'Email sent',
-        description: 'Timesheet summary has been emailed to the subcontractor.',
-      })
+      setActionLoading(true)
+      switch (type) {
+        case 'approve':
+          await approveTimesheet(timesheet.id)
+          await loadTimesheets()
+          toast({ variant: 'success', title: 'Timesheet approved', description: 'Timesheet has been approved and is ready for processing.' })
+          break
+        case 'reject':
+          await rejectTimesheet(timesheet.id, 'Rejected by user')
+          await loadTimesheets()
+          toast({ variant: 'success', title: 'Timesheet rejected', description: 'Timesheet has been rejected.' })
+          break
+        case 'markAsPaid':
+          await markTimesheetAsPaid(timesheet.id)
+          await loadTimesheets()
+          toast({ variant: 'success', title: 'Timesheet marked as paid', description: 'Timesheet has been marked as paid.' })
+          break
+        case 'email':
+          setSendingEmailId(timesheet.id)
+          await sendTimesheetEmail(timesheet.id)
+          toast({ variant: 'success', title: 'Email sent', description: 'Timesheet summary has been emailed to the subcontractor.' })
+          setSendingEmailId(null)
+          break
+      }
     } catch (error) {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to send email',
-      })
+      const messages: Record<typeof type, string> = {
+        approve: 'Failed to approve timesheet',
+        reject: 'Failed to reject timesheet',
+        markAsPaid: 'Failed to mark timesheet as paid',
+        email: 'Failed to send email',
+      }
+      toast({ variant: 'destructive', title: 'Error', description: error instanceof Error ? error.message : messages[type] })
+      if (type === 'email') setSendingEmailId(null)
     } finally {
-      setSendingEmailId(null)
+      setActionLoading(false)
+      setPendingAction(null)
     }
   }
 
@@ -572,7 +562,7 @@ export default function TimesheetsPage() {
                                 variant="ghost"
                                 size="sm"
                                 className="text-green-600 hover:text-green-700"
-                                onClick={() => handleApprove(timesheet.id)}
+                                onClick={() => handleApprove(timesheet)}
                                 title="Approve"
                               >
                                 <Check className="h-4 w-4" />
@@ -581,7 +571,7 @@ export default function TimesheetsPage() {
                                 variant="ghost"
                                 size="sm"
                                 className="text-red-600 hover:text-red-700"
-                                onClick={() => handleReject(timesheet.id)}
+                                onClick={() => handleReject(timesheet)}
                                 title="Reject"
                               >
                                 <X className="h-4 w-4" />
@@ -593,7 +583,7 @@ export default function TimesheetsPage() {
                               variant="ghost"
                               size="sm"
                               className="text-blue-600 hover:text-blue-700"
-                              onClick={() => handleMarkAsPaid(timesheet.id)}
+                              onClick={() => handleMarkAsPaid(timesheet)}
                               title="Mark as Paid"
                             >
                               <Banknote className="h-4 w-4" />
@@ -610,7 +600,7 @@ export default function TimesheetsPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleEmailTimesheet(timesheet.id)}
+                            onClick={() => handleEmailTimesheet(timesheet)}
                             disabled={!timesheet.subcontractor?.email || sendingEmailId === timesheet.id}
                             title={timesheet.subcontractor?.email ? 'Email to subcontractor' : 'No subcontractor email'}
                           >
@@ -679,6 +669,59 @@ export default function TimesheetsPage() {
               className="bg-red-600 hover:bg-red-700"
             >
               {deletingTimesheetId ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Action Confirmation Dialog (approve / reject / mark as paid / email) */}
+      <AlertDialog open={!!pendingAction} onOpenChange={(open) => { if (!open) setPendingAction(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingAction?.type === 'approve' && 'Approve timesheet?'}
+              {pendingAction?.type === 'reject' && 'Reject timesheet?'}
+              {pendingAction?.type === 'markAsPaid' && 'Mark as paid?'}
+              {pendingAction?.type === 'email' && 'Send email?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingAction?.type === 'approve' && (
+                <>This will approve the timesheet for <strong>{pendingAction.timesheet.subcontractor?.name}</strong> ({formatCurrency(pendingAction.timesheet.netAmount)} net) and mark it ready for processing.</>
+              )}
+              {pendingAction?.type === 'reject' && (
+                <>This will reject the timesheet for <strong>{pendingAction.timesheet.subcontractor?.name}</strong>. The subcontractor may need to resubmit.</>
+              )}
+              {pendingAction?.type === 'markAsPaid' && (
+                <>This will mark the timesheet for <strong>{pendingAction.timesheet.subcontractor?.name}</strong> ({formatCurrency(pendingAction.timesheet.netAmount)} net) as paid.</>
+              )}
+              {pendingAction?.type === 'email' && (
+                <>This will send a timesheet summary email to <strong>{pendingAction.timesheet.subcontractor?.name}</strong> at {pendingAction.timesheet.subcontractor?.email}.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={actionLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmAction}
+              disabled={actionLoading}
+              className={
+                pendingAction?.type === 'reject'
+                  ? 'bg-red-600 hover:bg-red-700'
+                  : pendingAction?.type === 'approve'
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : ''
+              }
+            >
+              {actionLoading
+                ? (pendingAction?.type === 'approve' ? 'Approving...'
+                  : pendingAction?.type === 'reject' ? 'Rejecting...'
+                  : pendingAction?.type === 'markAsPaid' ? 'Updating...'
+                  : 'Sending...')
+                : (pendingAction?.type === 'approve' ? 'Approve'
+                  : pendingAction?.type === 'reject' ? 'Reject'
+                  : pendingAction?.type === 'markAsPaid' ? 'Mark as Paid'
+                  : 'Send Email')
+              }
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

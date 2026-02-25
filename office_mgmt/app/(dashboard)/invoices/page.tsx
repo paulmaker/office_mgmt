@@ -73,6 +73,8 @@ export default function InvoicesPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [invoiceToDelete, setInvoiceToDelete] = useState<InvoiceWithRelations | null>(null)
   const [sendingEmailId, setSendingEmailId] = useState<string | null>(null)
+  const [emailConfirmInvoice, setEmailConfirmInvoice] = useState<InvoiceWithRelations | null>(null)
+  const [emailSending, setEmailSending] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -152,10 +154,16 @@ export default function InvoicesPage() {
     window.open(`/api/invoices/${id}/pdf`, '_blank')
   }
 
-  const handleSendEmail = async (id: string) => {
+  const handleSendEmail = (invoice: InvoiceWithRelations) => {
+    setEmailConfirmInvoice(invoice)
+  }
+
+  const confirmSendEmail = async () => {
+    if (!emailConfirmInvoice) return
     try {
-      setSendingEmailId(id)
-      const result = await sendInvoiceEmail(id)
+      setEmailSending(true)
+      setSendingEmailId(emailConfirmInvoice.id)
+      const result = await sendInvoiceEmail(emailConfirmInvoice.id)
       const count = result && typeof result === 'object' && 'sentTo' in result ? (result as { sentTo?: number }).sentTo : 1
       toast({
         variant: 'success',
@@ -164,7 +172,6 @@ export default function InvoicesPage() {
           ? `Invoice has been emailed to ${count} recipients.`
           : 'Invoice has been emailed to the client.',
       })
-      // Refresh to update status if changed to SENT
       loadInvoices()
     } catch (error) {
       toast({
@@ -174,6 +181,8 @@ export default function InvoicesPage() {
       })
     } finally {
       setSendingEmailId(null)
+      setEmailSending(false)
+      setEmailConfirmInvoice(null)
     }
   }
 
@@ -476,7 +485,7 @@ export default function InvoicesPage() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleSendEmail(invoice.id)}
+                            onClick={() => handleSendEmail(invoice)}
                             disabled={sendingEmailId === invoice.id}
                           >
                             {sendingEmailId === invoice.id ? (
@@ -534,6 +543,24 @@ export default function InvoicesPage() {
               className="bg-red-600 hover:bg-red-700"
             >
               {deletingInvoiceId ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Email Confirmation Dialog */}
+      <AlertDialog open={!!emailConfirmInvoice} onOpenChange={(open) => { if (!open) setEmailConfirmInvoice(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send invoice email?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will email invoice <strong>#{emailConfirmInvoice?.invoiceNumber}</strong> ({formatCurrency(emailConfirmInvoice?.total ?? 0)}) to <strong>{emailConfirmInvoice ? getClientName(emailConfirmInvoice) : ''}</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={emailSending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmSendEmail} disabled={emailSending}>
+              {emailSending ? 'Sending...' : 'Send Email'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

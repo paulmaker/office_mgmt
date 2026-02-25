@@ -61,6 +61,8 @@ export default function JobsPage() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [jobToDelete, setJobToDelete] = useState<JobWithRelations | null>(null)
   const [emailingJobId, setEmailingJobId] = useState<string | null>(null)
+  const [emailConfirmJob, setEmailConfirmJob] = useState<JobWithRelations | null>(null)
+  const [emailSending, setEmailSending] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
@@ -132,8 +134,15 @@ export default function JobsPage() {
     }
   }
 
-  const handleEmailToContractors = async (job: JobWithRelations) => {
+  const handleEmailToContractors = (job: JobWithRelations) => {
+    setEmailConfirmJob(job)
+  }
+
+  const confirmEmailToContractors = async () => {
+    if (!emailConfirmJob) return
+    const job = emailConfirmJob
     try {
+      setEmailSending(true)
       setEmailingJobId(job.id)
       const result = await sendJobSheetEmail(job.id)
       if (result.success) {
@@ -160,6 +169,8 @@ export default function JobsPage() {
       })
     } finally {
       setEmailingJobId(null)
+      setEmailSending(false)
+      setEmailConfirmJob(null)
     }
   }
 
@@ -473,6 +484,28 @@ export default function JobsPage() {
               className="bg-red-600 hover:bg-red-700"
             >
               {deletingJobId ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Email Confirmation Dialog */}
+      <AlertDialog open={!!emailConfirmJob} onOpenChange={(open) => { if (!open) setEmailConfirmJob(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Send job sheet email?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will email the job sheet for <strong>{emailConfirmJob?.jobNumber}</strong> to{' '}
+              {emailConfirmJob?.subcontractors?.length === 1
+                ? <strong>{emailConfirmJob.subcontractors[0].subcontractor.name}</strong>
+                : <><strong>{emailConfirmJob?.subcontractors?.length ?? 0}</strong> assigned contractors</>
+              }.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={emailSending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmEmailToContractors} disabled={emailSending}>
+              {emailSending ? 'Sending...' : 'Send Email'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
