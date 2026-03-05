@@ -37,7 +37,8 @@ export function formatDateTime(date: Date | string): string {
   }).format(d)
 }
 
-export function calculateCISDeduction(amount: number, cisStatus: string): number {
+export function calculateCISDeduction(amount: number, cisStatus: string, paymentType?: string): number {
+  if (paymentType === 'NON_CIS') return 0
   if (cisStatus === 'NOT_VERIFIED') {
     return amount * 0.30 // 30% for unverified
   } else if (cisStatus === 'VERIFIED_NET') {

@@ -147,7 +147,7 @@ export async function createTimesheet(data: {
     const additionalHoursRate = data.additionalHoursRate || 0
     const additionalAmount = additionalHours * additionalHoursRate
     const grossAmount = regularAmount + additionalAmount
-    const cisDeduction = calculateCISDeduction(grossAmount, subcontractor.cisStatus)
+    const cisDeduction = calculateCISDeduction(grossAmount, subcontractor.cisStatus, subcontractor.paymentType)
     const expenses = data.expenses || 0
     const netAmount = grossAmount - cisDeduction + expenses
 
@@ -273,7 +273,7 @@ export async function updateTimesheet(
     const regularAmount = computeRegularAmount(rateType, rate, hoursWorked, daysWorked, dailyRate)
     const additionalAmount = additionalHours * additionalHoursRate
     const grossAmount = regularAmount + additionalAmount
-    const cisDeduction = calculateCISDeduction(grossAmount, subcontractor.cisStatus)
+    const cisDeduction = calculateCISDeduction(grossAmount, subcontractor.cisStatus, subcontractor.paymentType)
     const expenses = data.expenses ?? existingTimesheet.expenses
     const netAmount = grossAmount - cisDeduction + expenses
 

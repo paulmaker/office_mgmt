@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { createTimesheet, updateTimesheet } from '@/app/actions/timesheets'
 import { getSubcontractors } from '@/app/actions/subcontractors'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, calculateCISDeduction } from '@/lib/utils'
 import { ReceiptUpload } from '@/components/timesheets/receipt-upload'
 import type { Timesheet, Subcontractor, TimesheetRateType } from '@prisma/client'
 
@@ -98,13 +98,16 @@ export function TimesheetForm({ timesheet, onSuccess, onCancel }: TimesheetFormP
   const additionalHours = toNum(watch('additionalHours'))
   const additionalHoursRate = toNum(watch('additionalHoursRate'))
   const expenses = toNum(watch('expenses'))
+  const selectedSubId = watch('subcontractorId')
+  const selectedSub = subcontractors.find((s) => s.id === selectedSubId)
   const hourlyAmount = rateType === 'DAILY' ? 0 : hoursWorked * rate
   const dailyAmount = daysWorked * (dailyRate || (rateType === 'DAILY' ? rate : 0))
   const regularAmount = hourlyAmount + dailyAmount
   const additionalAmount = additionalHours * additionalHoursRate
   const grossAmount = regularAmount + additionalAmount
-  // Note: CIS calculation would need subcontractor CIS status, shown as estimate
-  const estimatedCIS = grossAmount * 0.20 // 20% estimate
+  const estimatedCIS = selectedSub
+    ? calculateCISDeduction(grossAmount, selectedSub.cisStatus, selectedSub.paymentType)
+    : 0
   const netAmount = grossAmount - estimatedCIS + expenses
 
   useEffect(() => {
@@ -410,7 +413,7 @@ export function TimesheetForm({ timesheet, onSuccess, onCancel }: TimesheetFormP
           <span className="text-sm font-medium">{formatCurrency(grossAmount)}</span>
         </div>
         <div className="flex justify-between text-sm text-gray-600">
-          <span>CIS Deduction (estimated):</span>
+          <span>CIS Deduction:</span>
           <span>-{formatCurrency(estimatedCIS)}</span>
         </div>
         <div className="flex justify-between text-sm text-gray-600">
