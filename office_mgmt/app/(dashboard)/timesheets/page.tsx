@@ -357,14 +357,14 @@ export default function TimesheetsPage() {
   })()
 
   const stats = {
-    total: timesheets.length,
-    submitted: timesheets.filter(t => t.status === 'SUBMITTED').length,
-    approved: timesheets.filter(t => t.status === 'APPROVED').length,
-    processed: timesheets.filter(t => t.status === 'PROCESSED').length,
-    paid: timesheets.filter(t => t.status === 'PAID').length,
-    totalValue: timesheets.reduce((sum, t) => sum + t.netAmount, 0),
-    totalCIS: timesheets.reduce((sum, t) => sum + t.cisDeduction, 0),
-    totalExpenses: timesheets.reduce((sum, t) => sum + (t.expenses || 0), 0),
+    total: filteredTimesheets.length,
+    submitted: filteredTimesheets.filter(t => t.status === 'SUBMITTED').length,
+    approved: filteredTimesheets.filter(t => t.status === 'APPROVED').length,
+    processed: filteredTimesheets.filter(t => t.status === 'PROCESSED').length,
+    paid: filteredTimesheets.filter(t => t.status === 'PAID').length,
+    totalValue: filteredTimesheets.reduce((sum, t) => sum + t.netAmount, 0),
+    totalCIS: filteredTimesheets.reduce((sum, t) => sum + t.cisDeduction, 0),
+    totalExpenses: filteredTimesheets.reduce((sum, t) => sum + (t.expenses || 0), 0),
   }
 
   return (

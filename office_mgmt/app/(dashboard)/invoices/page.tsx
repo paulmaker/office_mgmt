@@ -254,12 +254,12 @@ export default function InvoicesPage() {
   }
 
   const stats = {
-    total: invoices.length,
-    sales: invoices.filter(i => i.type === 'SALES').length,
-    purchase: invoices.filter(i => i.type === 'PURCHASE').length,
-    overdue: invoices.filter(i => i.status === 'OVERDUE').length,
-    totalValue: invoices.reduce((sum, i) => sum + i.total, 0),
-    outstanding: invoices.filter(i => i.status !== 'PAID' && i.type === 'SALES').reduce((sum, i) => {
+    total: filteredInvoices.length,
+    sales: filteredInvoices.filter(i => i.type === 'SALES').length,
+    purchase: filteredInvoices.filter(i => i.type === 'PURCHASE').length,
+    overdue: filteredInvoices.filter(i => i.status === 'OVERDUE').length,
+    totalValue: filteredInvoices.reduce((sum, i) => sum + i.total, 0),
+    outstanding: filteredInvoices.filter(i => i.status !== 'PAID' && i.type === 'SALES').reduce((sum, i) => {
       const outstanding = (i as any).outstandingAmount ?? (i.total - ((i as any).paidAmount ?? 0))
       return sum + outstanding
     }, 0),
