@@ -69,17 +69,20 @@ export async function canAccessEntity(
     return true
   }
 
-  // Account Admin can access entities within their account
-  if (user.role === 'ACCOUNT_ADMIN') {
+  // Account Admin and Entity Admin can access entities within their account
+  if (
+    (user.role === 'ACCOUNT_ADMIN' || user.role === 'ENTITY_ADMIN') &&
+    user.entity?.tenantAccountId
+  ) {
     const targetEntity = await prisma.entity.findUnique({
       where: { id: entityId },
       select: { tenantAccountId: true },
     })
 
-    return targetEntity?.tenantAccountId === user.entity?.tenantAccountId
+    return targetEntity?.tenantAccountId === user.entity.tenantAccountId
   }
 
-  // Entity Admin and Entity User can only access their own entity
+  // Entity User can only access their own entity
   return user.entityId === entityId
 }
 
@@ -112,8 +115,11 @@ export async function getAccessibleEntityIds(
     return allEntities.map((e) => e.id)
   }
 
-  // Account Admin can access all entities in their account
-  if (user.role === 'ACCOUNT_ADMIN' && user.entity?.tenantAccountId) {
+  // Account Admin and Entity Admin can access all entities in their account
+  if (
+    (user.role === 'ACCOUNT_ADMIN' || user.role === 'ENTITY_ADMIN') &&
+    user.entity?.tenantAccountId
+  ) {
     const accountEntities = await prisma.entity.findMany({
       where: { tenantAccountId: user.entity.tenantAccountId },
       select: { id: true },
@@ -121,7 +127,7 @@ export async function getAccessibleEntityIds(
     return accountEntities.map((e) => e.id)
   }
 
-  // Entity Admin and Entity User can only access their own entity
+  // Entity User can only access their own entity
   return user.entityId ? [user.entityId] : []
 }
 
