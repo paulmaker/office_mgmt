@@ -32,6 +32,7 @@ import {
 import { TimesheetForm } from '@/components/timesheets/timesheet-form'
 import { getTimesheets, deleteTimesheet, approveTimesheet, rejectTimesheet, markTimesheetAsPaid, getTimesheet } from '@/app/actions/timesheets'
 import { sendTimesheetEmail } from '@/app/actions/email'
+import { getEmailCcAddress } from '@/app/actions/settings'
 import { formatCurrency, formatDate, getTimesheetStatusColor } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { SortableHeader } from '@/components/ui/sortable-header'
@@ -67,6 +68,8 @@ export default function TimesheetsPage() {
     timesheet: TimesheetWithRelations
   } | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
+  const [ccEmail, setCcEmail] = useState<string | null>(null)
+  const [sendCopy, setSendCopy] = useState(true)
   const { toast } = useToast()
 
   const loadTimesheets = useCallback(async () => {
@@ -87,6 +90,7 @@ export default function TimesheetsPage() {
 
   useEffect(() => {
     loadTimesheets()
+    getEmailCcAddress().then(setCcEmail)
   }, [loadTimesheets])
 
   const handleCreateClick = () => {
@@ -151,6 +155,7 @@ export default function TimesheetsPage() {
   }
 
   const handleEmailTimesheet = (timesheet: TimesheetWithRelations) => {
+    setSendCopy(true)
     setPendingAction({ type: 'email', timesheet })
   }
 
@@ -177,7 +182,7 @@ export default function TimesheetsPage() {
           break
         case 'email':
           setSendingEmailId(timesheet.id)
-          await sendTimesheetEmail(timesheet.id)
+          await sendTimesheetEmail(timesheet.id, sendCopy)
           toast({ variant: 'success', title: 'Email sent', description: 'Timesheet summary has been emailed to the subcontractor.' })
           setSendingEmailId(null)
           break
@@ -699,6 +704,17 @@ export default function TimesheetsPage() {
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {pendingAction?.type === 'email' && ccEmail && (
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={sendCopy}
+                onChange={(e) => setSendCopy(e.target.checked)}
+              />
+              Do you want to receive a copy? ({ccEmail})
+            </label>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={actionLoading}>Cancel</AlertDialogCancel>
             <AlertDialogAction

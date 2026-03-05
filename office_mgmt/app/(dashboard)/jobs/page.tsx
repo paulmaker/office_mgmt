@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { JobForm } from '@/components/jobs/job-form'
 import { getJobs, deleteJob, getJob, sendJobSheetEmail } from '@/app/actions/jobs'
+import { getEmailCcAddress } from '@/app/actions/settings'
 import { formatCurrency, formatDate, getJobStatusColor } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { SortableHeader } from '@/components/ui/sortable-header'
@@ -63,10 +64,13 @@ export default function JobsPage() {
   const [emailingJobId, setEmailingJobId] = useState<string | null>(null)
   const [emailConfirmJob, setEmailConfirmJob] = useState<JobWithRelations | null>(null)
   const [emailSending, setEmailSending] = useState(false)
+  const [ccEmail, setCcEmail] = useState<string | null>(null)
+  const [sendCopy, setSendCopy] = useState(true)
   const { toast } = useToast()
 
   useEffect(() => {
     loadJobs()
+    getEmailCcAddress().then(setCcEmail)
   }, [])
 
   const loadJobs = async () => {
@@ -135,6 +139,7 @@ export default function JobsPage() {
   }
 
   const handleEmailToContractors = (job: JobWithRelations) => {
+    setSendCopy(true)
     setEmailConfirmJob(job)
   }
 
@@ -144,7 +149,7 @@ export default function JobsPage() {
     try {
       setEmailSending(true)
       setEmailingJobId(job.id)
-      const result = await sendJobSheetEmail(job.id)
+      const result = await sendJobSheetEmail(job.id, sendCopy)
       if (result.success) {
         const count = job.subcontractors?.length ?? 0
         toast({
@@ -502,6 +507,17 @@ export default function JobsPage() {
               }.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {ccEmail && (
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={sendCopy}
+                onChange={(e) => setSendCopy(e.target.checked)}
+              />
+              Do you want to receive a copy? ({ccEmail})
+            </label>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={emailSending}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmEmailToContractors} disabled={emailSending}>

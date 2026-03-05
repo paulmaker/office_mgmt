@@ -199,6 +199,18 @@ export default function SettingsPage() {
                 Invoices will be sent from this address
               </p>
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="emailCc">Cc Email Address</Label>
+              <Input
+                id="emailCc"
+                type="email"
+                {...register('emailCc')}
+                placeholder="office@yourcompany.com"
+              />
+              <p className="text-xs text-gray-500">
+                Receive a copy of outgoing emails at this address
+              </p>
+            </div>
             <div className="flex items-center justify-between p-3 border rounded-lg bg-green-50">
               <div className="flex items-center gap-2">
                 <div className="h-2 w-2 rounded-full bg-green-600"></div>

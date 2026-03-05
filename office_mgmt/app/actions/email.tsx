@@ -6,6 +6,7 @@ import { resend, EMAIL_FROM } from "@/lib/email"
 import { renderToBuffer } from "@react-pdf/renderer"
 import { InvoicePDF } from "@/lib/invoice-pdf"
 import { formatCurrency } from "@/lib/utils"
+import { getEmailCcAddress } from "@/app/actions/settings"
 
 function getInvoiceRecipients(client: { email: string; invoiceEmails?: unknown }): string[] {
   const raw = client.invoiceEmails
@@ -20,7 +21,7 @@ function getInvoiceRecipients(client: { email: string; invoiceEmails?: unknown }
   return []
 }
 
-export async function sendInvoiceEmail(invoiceId: string) {
+export async function sendInvoiceEmail(invoiceId: string, sendCopy = true) {
   try {
     const session = await auth()
     if (!session?.user?.entityId) {
@@ -82,6 +83,8 @@ export async function sendInvoiceEmail(invoiceId: string) {
       { filename: `Invoice-${invoice.invoiceNumber}.pdf`, content: pdfBuffer },
     ]
 
+    const ccAddress = sendCopy ? await getEmailCcAddress() : null
+
     let lastId: string | undefined
     for (const to of recipients) {
       const { data, error } = await resend.emails.send({
@@ -90,6 +93,7 @@ export async function sendInvoiceEmail(invoiceId: string) {
         subject,
         html,
         attachments,
+        ...(ccAddress ? { cc: ccAddress } : {}),
       })
       if (error) {
         console.error("Resend Error:", error)
@@ -112,7 +116,7 @@ export async function sendInvoiceEmail(invoiceId: string) {
   }
 }
 
-export async function sendTimesheetEmail(timesheetId: string) {
+export async function sendTimesheetEmail(timesheetId: string, sendCopy = true) {
   try {
     const session = await auth()
     if (!session?.user?.entityId) {
@@ -161,11 +165,14 @@ export async function sendTimesheetEmail(timesheetId: string) {
       <p>Best regards,<br>${timesheet.entity.name}</p>
     `
 
+    const ccAddress = sendCopy ? await getEmailCcAddress() : null
+
     const { data, error } = await resend.emails.send({
       from: EMAIL_FROM,
       to: timesheet.subcontractor.email,
       subject: `Timesheet ${periodStart} – ${periodEnd} – ${timesheet.entity.name}`,
       html,
+      ...(ccAddress ? { cc: ccAddress } : {}),
     })
 
     if (error) {

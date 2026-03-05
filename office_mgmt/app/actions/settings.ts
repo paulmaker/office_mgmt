@@ -15,6 +15,7 @@ const settingsSchema = z.object({
   phone: z.string().optional(),
   emailTimesheets: z.string().email().optional().or(z.literal('')),
   emailInvoices: z.string().email().optional().or(z.literal('')),
+  emailCc: z.string().email().optional().or(z.literal('')),
   
   // CIS Settings
   cisVerifiedNetRate: z.coerce.number().default(20),
@@ -64,6 +65,7 @@ export async function getSettings() {
     phone: '',
     emailTimesheets: '',
     emailInvoices: '',
+    emailCc: '',
     cisVerifiedNetRate: 20,
     cisNotVerifiedRate: 30,
     cisVerifiedGrossRate: 0,
@@ -112,6 +114,19 @@ export async function getEnabledModulesForCurrentEntity() {
   }
   
   return settings.enabledModules
+}
+
+export async function getEmailCcAddress(): Promise<string | null> {
+  const session = await auth()
+  if (!session?.user?.entityId) return null
+
+  const entity = await prisma.entity.findUnique({
+    where: { id: session.user.entityId },
+    select: { settings: true },
+  })
+
+  const cc = (entity?.settings as Record<string, unknown> | null)?.emailCc
+  return typeof cc === 'string' && cc.trim().length > 0 ? cc.trim() : null
 }
 
 export async function updateSettings(data: SettingsFormData) {

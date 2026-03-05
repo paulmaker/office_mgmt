@@ -9,6 +9,7 @@ import type { JobStatus } from '@prisma/client'
 import { requireModule } from '@/lib/module-access'
 import { resend, EMAIL_FROM } from '@/lib/email'
 import { formatDate } from '@/lib/utils'
+import { getEmailCcAddress } from '@/app/actions/settings'
 
 /**
  * Get all jobs for the current user's accessible entities
@@ -474,7 +475,7 @@ export async function getJobsByClient(clientId: string) {
  * Send job sheet email to all assigned subcontractors (contractors).
  * Email includes address, description, job commencement, notes, and line items without prices.
  */
-export async function sendJobSheetEmail(jobId: string): Promise<{ success: boolean; error?: string }> {
+export async function sendJobSheetEmail(jobId: string, sendCopy = true): Promise<{ success: boolean; error?: string }> {
   try {
     const session = await auth()
     if (!session?.user) return { success: false, error: 'Unauthorized' }
@@ -538,12 +539,15 @@ export async function sendJobSheetEmail(jobId: string): Promise<{ success: boole
 
     const subject = `Job Sheet: ${job.jobNumber} - ${job.jobDescription.slice(0, 50)}${job.jobDescription.length > 50 ? '...' : ''}`
 
+    const ccAddress = sendCopy ? await getEmailCcAddress() : null
+
     for (const { subcontractor } of contractorsWithEmail) {
       await resend.emails.send({
         from: EMAIL_FROM,
         to: subcontractor.email,
         subject,
         html,
+        ...(ccAddress ? { cc: ccAddress } : {}),
       })
     }
 

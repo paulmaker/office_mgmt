@@ -33,6 +33,7 @@ import {
 import { InvoiceForm } from '@/components/invoices/invoice-form'
 import { getInvoices, deleteInvoice, getInvoice } from '@/app/actions/invoices'
 import { sendInvoiceEmail } from '@/app/actions/email'
+import { getEmailCcAddress } from '@/app/actions/settings'
 import { formatCurrency, formatDate, getInvoiceStatusColor } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
 import { SortableHeader } from '@/components/ui/sortable-header'
@@ -75,10 +76,13 @@ export default function InvoicesPage() {
   const [sendingEmailId, setSendingEmailId] = useState<string | null>(null)
   const [emailConfirmInvoice, setEmailConfirmInvoice] = useState<InvoiceWithRelations | null>(null)
   const [emailSending, setEmailSending] = useState(false)
+  const [ccEmail, setCcEmail] = useState<string | null>(null)
+  const [sendCopy, setSendCopy] = useState(true)
   const { toast } = useToast()
 
   useEffect(() => {
     loadInvoices()
+    getEmailCcAddress().then(setCcEmail)
   }, [])
 
   const loadInvoices = async () => {
@@ -155,6 +159,7 @@ export default function InvoicesPage() {
   }
 
   const handleSendEmail = (invoice: InvoiceWithRelations) => {
+    setSendCopy(true)
     setEmailConfirmInvoice(invoice)
   }
 
@@ -163,7 +168,7 @@ export default function InvoicesPage() {
     try {
       setEmailSending(true)
       setSendingEmailId(emailConfirmInvoice.id)
-      const result = await sendInvoiceEmail(emailConfirmInvoice.id)
+      const result = await sendInvoiceEmail(emailConfirmInvoice.id, sendCopy)
       const count = result && typeof result === 'object' && 'sentTo' in result ? (result as { sentTo?: number }).sentTo : 1
       toast({
         variant: 'success',
@@ -557,6 +562,17 @@ export default function InvoicesPage() {
               This will email invoice <strong>#{emailConfirmInvoice?.invoiceNumber}</strong> ({formatCurrency(emailConfirmInvoice?.total ?? 0)}) to <strong>{emailConfirmInvoice ? getClientName(emailConfirmInvoice) : ''}</strong>.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {ccEmail && (
+            <label className="flex items-center gap-2 text-sm cursor-pointer">
+              <input
+                type="checkbox"
+                className="h-4 w-4"
+                checked={sendCopy}
+                onChange={(e) => setSendCopy(e.target.checked)}
+              />
+              Do you want to receive a copy? ({ccEmail})
+            </label>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={emailSending}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmSendEmail} disabled={emailSending}>
