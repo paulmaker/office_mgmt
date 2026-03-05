@@ -522,7 +522,7 @@ export async function sendJobSheetEmail(jobId: string, sendCopy = true): Promise
         <p><strong>Description:</strong><br/>${escapeHtml(job.jobDescription)}</p>
         <p><strong>Job commencement:</strong> ${formatDate(job.dateWorkCommenced)}</p>
         ${job.notes ? `<p><strong>Notes:</strong><br/>${escapeHtml(job.notes)}</p>` : ''}
-        <p><strong>Line items (no prices):</strong></p>
+        <p><strong>Line items:</strong></p>
         <table style="width:100%;border-collapse:collapse;margin-top:8px">
           <thead>
             <tr style="background:#f5f5f5">
