@@ -109,7 +109,10 @@ export function JobPriceForm({ jobPrice, onSuccess, onCancel }: JobPriceFormProp
           disabled={!!jobPrice}
         >
           <option value="">Select a client</option>
-          {clients.map((client) => (
+          {clients
+            .slice()
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map((client) => (
             <option key={client.id} value={client.id}>
               {client.name}
             </option>

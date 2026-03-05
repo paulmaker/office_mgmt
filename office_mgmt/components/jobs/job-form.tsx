@@ -253,7 +253,10 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
             className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
             <option value="">Select a client</option>
-            {clients.map((client) => (
+            {clients
+              .slice()
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((client) => (
               <option key={client.id} value={client.id}>
                 {client.name}
               </option>
@@ -330,7 +333,10 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
             {...register('employeeIds')}
             className="flex min-h-[100px] w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
-            {employees.map((employee) => (
+            {employees
+              .slice()
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((employee) => (
               <option key={employee.id} value={employee.id}>
                 {employee.name} {employee.employeeId ? `(${employee.employeeId})` : ''}
               </option>
@@ -349,7 +355,10 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
             {...register('subcontractorIds')}
             className="flex min-h-[100px] w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
           >
-            {subcontractors.map((subcontractor) => (
+            {subcontractors
+              .slice()
+              .sort((a, b) => a.name.localeCompare(b.name))
+              .map((subcontractor) => (
               <option key={subcontractor.id} value={subcontractor.id}>
                 {subcontractor.name}
               </option>

@@ -105,7 +105,10 @@ export default function ChooseEntityPage() {
               value={selectedId ?? ''}
               onChange={(e) => setSelectedId(e.target.value)}
             >
-              {entities.map((entity) => (
+              {entities
+                .slice()
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((entity) => (
                 <option key={entity.id} value={entity.id}>
                   {entity.name}
                 </option>

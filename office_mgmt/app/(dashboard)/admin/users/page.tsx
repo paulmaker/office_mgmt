@@ -350,7 +350,10 @@ export default function UsersPage() {
                   required
                 >
                   <option value="">Select a company</option>
-                  {entities.map((entity) => (
+                  {entities
+                    .slice()
+                    .sort((a: any, b: any) => a.name.localeCompare(b.name))
+                    .map((entity: any) => (
                     <option key={entity.id} value={entity.id}>
                       {entity.name} ({entity.tenantAccount.name})
                     </option>

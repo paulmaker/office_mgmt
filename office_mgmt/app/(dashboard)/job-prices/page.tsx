@@ -248,7 +248,10 @@ export default function JobPricesPage() {
                   className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                 >
                   <option value="">All Clients</option>
-                  {clients.map((client) => (
+                  {clients
+                    .slice()
+                    .sort((a: any, b: any) => a.name.localeCompare(b.name))
+                    .map((client: any) => (
                     <option key={client.id} value={client.id}>
                       {client.name}
                     </option>

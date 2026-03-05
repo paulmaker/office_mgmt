@@ -183,7 +183,10 @@ export function TimesheetForm({ timesheet, onSuccess, onCancel }: TimesheetFormP
           className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
         >
           <option value="">Select a subcontractor</option>
-          {subcontractors.map((sub) => (
+          {subcontractors
+            .slice()
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map((sub) => (
             <option key={sub.id} value={sub.id}>
               {sub.name} ({sub.cisStatus.replace('_', ' ')})
             </option>

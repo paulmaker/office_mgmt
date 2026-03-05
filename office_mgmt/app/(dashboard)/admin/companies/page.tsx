@@ -284,7 +284,10 @@ export default function CompaniesPage() {
                     required
                   >
                     <option value="">Select an organisation</option>
-                    {organisations.map((org) => (
+                    {organisations
+                      .slice()
+                      .sort((a: any, b: any) => a.name.localeCompare(b.name))
+                      .map((org: any) => (
                       <option key={org.id} value={org.id}>
                         {org.name}
                       </option>
