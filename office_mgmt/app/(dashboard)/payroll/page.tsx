@@ -15,7 +15,7 @@ import {
 import { getTimesheets } from '@/app/actions/timesheets'
 import { getSubcontractors } from '@/app/actions/subcontractors'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Download, FileText, Calendar } from 'lucide-react'
+import { FileText } from 'lucide-react'
 import type { Timesheet } from '@prisma/client'
 
 type TimesheetWithRelations = Timesheet & {
@@ -74,16 +74,6 @@ export default function PayrollPage() {
           <p className="text-gray-500 mt-1">
             Process CIS payments and generate returns
           </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline">
-            <Calendar className="h-4 w-4 mr-2" />
-            CIS Return
-          </Button>
-          <Button>
-            <Download className="h-4 w-4 mr-2" />
-            Process Payments
-          </Button>
         </div>
       </div>
 
