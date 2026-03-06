@@ -4,11 +4,17 @@ import { FileText, TrendingUp, DollarSign } from 'lucide-react'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { redirect } from 'next/navigation'
-import { startOfMonth, subMonths, format, endOfMonth } from 'date-fns'
+import { startOfMonth, subMonths, format } from 'date-fns'
 import { ExportButton } from '@/components/reports/export-button'
+import { ReportDateFilter } from '@/components/reports/report-date-filter'
 import { requireModule } from '@/lib/module-access'
+import { Suspense } from 'react'
 
-export default async function ReportsPage() {
+interface ReportsPageProps {
+  searchParams: Promise<{ from?: string; to?: string; preset?: string }>
+}
+
+export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const session = await auth()
   if (!session?.user?.entityId) {
     redirect('/login')
@@ -23,11 +29,23 @@ export default async function ReportsPage() {
     redirect('/dashboard')
   }
 
-  // Calculate dates
+  const params = await searchParams
   const now = new Date()
+
+  const filterStart = params.from ? new Date(params.from + 'T00:00:00') : null
+  const filterEnd = params.to ? new Date(params.to + 'T23:59:59') : null
+  const hasDateFilter = filterStart || filterEnd
+
+  const dateWhere = {
+    ...(filterStart ? { gte: filterStart } : {}),
+    ...(filterEnd ? { lte: filterEnd } : {}),
+  }
+  const hasDateWhere = Object.keys(dateWhere).length > 0
+
+  // Fallback dates for when no filter is applied
   const currentQuarter = Math.floor((now.getMonth() + 3) / 3)
   const quarterStartMonth = (currentQuarter - 1) * 3
-  const quarterStartDate = new Date(now.getFullYear(), quarterStartMonth, 1)
+  const defaultQuarterStart = new Date(now.getFullYear(), quarterStartMonth, 1)
   const sixMonthsAgo = startOfMonth(subMonths(now, 5))
 
   // Fetch data in parallel
@@ -42,21 +60,21 @@ export default async function ReportsPage() {
     monthlyPurchases,
     monthlyTimesheets
   ] = await Promise.all([
-    // 1. Total Stats
+    // 1. Profit & Loss
     prisma.invoice.aggregate({
       _sum: { total: true },
-      where: { entityId, type: 'SALES', status: 'PAID' }
+      where: { entityId, type: 'SALES', status: 'PAID', ...(hasDateWhere ? { date: dateWhere } : {}) }
     }),
     prisma.invoice.aggregate({
       _sum: { total: true },
-      where: { entityId, type: 'PURCHASE', status: 'PAID' }
+      where: { entityId, type: 'PURCHASE', status: 'PAID', ...(hasDateWhere ? { date: dateWhere } : {}) }
     }),
     prisma.timesheet.aggregate({
       _sum: { grossAmount: true },
-      where: { entityId, status: 'PAID' }
+      where: { entityId, status: 'PAID', ...(hasDateWhere ? { periodEnd: dateWhere } : {}) }
     }),
 
-    // 2. VAT Summary (Current Quarter)
+    // 2. VAT Summary
     prisma.invoice.aggregate({
       _sum: { vatAmount: true },
       _count: true,
@@ -64,7 +82,7 @@ export default async function ReportsPage() {
         entityId, 
         type: 'SALES', 
         status: 'PAID',
-        date: { gte: quarterStartDate }
+        date: hasDateWhere ? dateWhere : { gte: defaultQuarterStart }
       }
     }),
     prisma.invoice.aggregate({
@@ -74,23 +92,23 @@ export default async function ReportsPage() {
         entityId, 
         type: 'PURCHASE', 
         status: 'PAID',
-        date: { gte: quarterStartDate }
+        date: hasDateWhere ? dateWhere : { gte: defaultQuarterStart }
       }
     }),
 
-    // 3. CIS Summary (All time or current tax year - doing all time for now as per mock)
+    // 3. CIS Summary
     prisma.timesheet.findMany({
-      where: { entityId, status: 'PAID', cisDeduction: { gt: 0 } },
+      where: { entityId, status: 'PAID', cisDeduction: { gt: 0 }, ...(hasDateWhere ? { periodEnd: dateWhere } : {}) },
       include: { subcontractor: true }
     }),
 
-    // 4. Monthly Cash Flow Data (Last 6 months)
+    // 4. Monthly Cash Flow Data
     prisma.invoice.findMany({
       where: { 
         entityId, 
         type: 'SALES', 
         status: 'PAID',
-        date: { gte: sixMonthsAgo }
+        date: hasDateWhere ? dateWhere : { gte: sixMonthsAgo }
       },
       select: { date: true, total: true }
     }),
@@ -99,7 +117,7 @@ export default async function ReportsPage() {
         entityId, 
         type: 'PURCHASE', 
         status: 'PAID',
-        date: { gte: sixMonthsAgo }
+        date: hasDateWhere ? dateWhere : { gte: sixMonthsAgo }
       },
       select: { date: true, total: true }
     }),
@@ -107,7 +125,7 @@ export default async function ReportsPage() {
       where: { 
         entityId, 
         status: 'PAID',
-        periodEnd: { gte: sixMonthsAgo }
+        periodEnd: hasDateWhere ? dateWhere : { gte: sixMonthsAgo }
       },
       select: { periodEnd: true, grossAmount: true }
     })
@@ -140,13 +158,23 @@ export default async function ReportsPage() {
   const unverifiedCount = cisTimesheets.filter(t => (t.cisDeduction / t.grossAmount) > 0.20).length
 
   // --- Process Monthly Data ---
-  // Create map of last 6 months
   const monthlyDataMap = new Map<string, { revenue: number, expenses: number }>()
-  
-  for (let i = 0; i < 6; i++) {
-    const d = subMonths(now, i)
-    const key = format(d, 'MMM yyyy')
-    monthlyDataMap.set(key, { revenue: 0, expenses: 0 })
+
+  if (hasDateFilter) {
+    const rangeStart = filterStart || new Date(0)
+    const rangeEnd = filterEnd || now
+    let cursor = startOfMonth(rangeStart)
+    while (cursor <= rangeEnd) {
+      const key = format(cursor, 'MMM yyyy')
+      monthlyDataMap.set(key, { revenue: 0, expenses: 0 })
+      cursor = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1)
+    }
+  } else {
+    for (let i = 0; i < 6; i++) {
+      const d = subMonths(now, i)
+      const key = format(d, 'MMM yyyy')
+      monthlyDataMap.set(key, { revenue: 0, expenses: 0 })
+    }
   }
 
   // Aggregate Sales
@@ -180,6 +208,9 @@ export default async function ReportsPage() {
     .map(([month, data]) => ({ month, ...data }))
     .reverse()
 
+  const exportStartDate = filterStart || undefined
+  const exportEndDate = filterEnd || undefined
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -189,10 +220,18 @@ export default async function ReportsPage() {
             Financial reports, VAT returns, and CIS summaries
           </p>
         </div>
-        <ExportButton reportType="all" variant="default" size="default">
+        <ExportButton reportType="all" variant="default" size="default" startDate={exportStartDate} endDate={exportEndDate}>
           Export All
         </ExportButton>
       </div>
+
+      <Card>
+        <CardContent className="pt-6">
+          <Suspense fallback={null}>
+            <ReportDateFilter />
+          </Suspense>
+        </CardContent>
+      </Card>
 
       {/* Quick Stats */}
       <div className="grid gap-4 md:grid-cols-4">
@@ -202,7 +241,7 @@ export default async function ReportsPage() {
             <CardTitle className="text-2xl text-green-600">{formatCurrency(totalRevenue)}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-gray-500">From paid invoices</p>
+            <p className="text-xs text-gray-500">{hasDateFilter ? 'Filtered period' : 'All time'}</p>
           </CardContent>
         </Card>
 
@@ -212,7 +251,7 @@ export default async function ReportsPage() {
             <CardTitle className="text-2xl text-red-600">{formatCurrency(totalExpenses)}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-gray-500">Paid to suppliers & subcontractors</p>
+            <p className="text-xs text-gray-500">{hasDateFilter ? 'Filtered period' : 'All time'}</p>
           </CardContent>
         </Card>
 
@@ -222,7 +261,7 @@ export default async function ReportsPage() {
             <CardTitle className="text-2xl text-blue-600">{formatCurrency(netProfit)}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-gray-500">Revenue minus expenses</p>
+            <p className="text-xs text-gray-500">{hasDateFilter ? 'Filtered period' : 'All time'}</p>
           </CardContent>
         </Card>
 
@@ -234,7 +273,7 @@ export default async function ReportsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-gray-500">Current margin</p>
+            <p className="text-xs text-gray-500">{hasDateFilter ? 'Filtered period' : 'All time'}</p>
           </CardContent>
         </Card>
       </div>
@@ -250,9 +289,9 @@ export default async function ReportsPage() {
                   <TrendingUp className="h-5 w-5" />
                   Profit & Loss
                 </CardTitle>
-                <CardDescription>Income statement summary</CardDescription>
+                <CardDescription>{hasDateFilter ? 'Filtered period' : 'All time'} income statement</CardDescription>
               </div>
-              <ExportButton reportType="profit-loss" />
+              <ExportButton reportType="profit-loss" startDate={exportStartDate} endDate={exportEndDate} />
             </div>
           </CardHeader>
           <CardContent>
@@ -292,9 +331,9 @@ export default async function ReportsPage() {
                   <FileText className="h-5 w-5" />
                   VAT Summary
                 </CardTitle>
-                <CardDescription>Current quarter VAT position</CardDescription>
+                <CardDescription>{hasDateFilter ? 'Filtered period' : 'Current quarter'} VAT position</CardDescription>
               </div>
-              <ExportButton reportType="vat" />
+              <ExportButton reportType="vat" startDate={exportStartDate} endDate={exportEndDate} />
             </div>
           </CardHeader>
           <CardContent>
@@ -336,9 +375,9 @@ export default async function ReportsPage() {
                   <DollarSign className="h-5 w-5" />
                   CIS Deductions
                 </CardTitle>
-                <CardDescription>CIS summary (Paid Timesheets)</CardDescription>
+                <CardDescription>{hasDateFilter ? 'Filtered period' : 'All time'} CIS summary</CardDescription>
               </div>
-              <ExportButton reportType="cis" />
+              <ExportButton reportType="cis" startDate={exportStartDate} endDate={exportEndDate} />
             </div>
           </CardHeader>
           <CardContent>
@@ -374,15 +413,15 @@ export default async function ReportsPage() {
                   <TrendingUp className="h-5 w-5" />
                   Cash Flow
                 </CardTitle>
-                <CardDescription>Last 6 months cash flow</CardDescription>
+                <CardDescription>{hasDateFilter ? 'Filtered period' : 'Last 6 months'} cash flow</CardDescription>
               </div>
-              <ExportButton reportType="cash-flow" />
+              <ExportButton reportType="cash-flow" startDate={exportStartDate} endDate={exportEndDate} />
             </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               {monthlyData.length === 0 ? (
-                 <p className="text-sm text-gray-500 text-center py-4">No data available for the last 6 months</p>
+                 <p className="text-sm text-gray-500 text-center py-4">No data available for this period</p>
               ) : (
                 monthlyData.map((month) => (
                   <div key={month.month} className="flex justify-between items-center pb-3 border-b last:border-0">

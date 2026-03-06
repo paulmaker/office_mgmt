@@ -58,7 +58,7 @@ export function ExportButton({
           filename = `cash-flow-${new Date().toISOString().split('T')[0]}.csv`
           break
         case 'all':
-          csv = await exportAllReports()
+          csv = await exportAllReports(startDate, endDate)
           filename = `all-reports-${new Date().toISOString().split('T')[0]}.csv`
           break
         default:

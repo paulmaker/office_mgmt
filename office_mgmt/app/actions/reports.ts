@@ -396,21 +396,16 @@ export async function exportCashFlow(startDate?: Date, endDate?: Date) {
 /**
  * Export all reports as a combined CSV
  */
-export async function exportAllReports() {
-  const { entityId } = await getReportContext()
-
-  const now = new Date()
-  const quarterStart = startOfMonth(subMonths(now, 2))
-  const sixMonthsAgo = startOfMonth(subMonths(now, 5))
+export async function exportAllReports(startDate?: Date, endDate?: Date) {
+  await getReportContext()
 
   const [profitLoss, vatSummary, cisDeductions, cashFlow] = await Promise.all([
-    exportProfitAndLoss(),
-    exportVATSummary(quarterStart, now),
-    exportCISDeductions(),
-    exportCashFlow(sixMonthsAgo, now)
+    exportProfitAndLoss(startDate, endDate),
+    exportVATSummary(startDate, endDate),
+    exportCISDeductions(startDate, endDate),
+    exportCashFlow(startDate, endDate)
   ])
 
-  // Combine all reports with headers
   const combined = [
     '='.repeat(80),
     'PROFIT & LOSS REPORT',
@@ -432,7 +427,7 @@ export async function exportAllReports() {
     '='.repeat(80),
     cashFlow,
     '',
-    `Generated: ${formatDate(now)}`
+    `Generated: ${formatDate(new Date())}`
   ].join('\n')
 
   return combined
