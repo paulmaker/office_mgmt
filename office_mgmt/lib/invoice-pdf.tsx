@@ -195,15 +195,30 @@ export const InvoicePDF = ({ invoice, entity, logoSrc, invoicePaymentInfo, invoi
       {/* Info Section */}
       <View style={styles.invoiceInfo}>
         <View style={styles.infoGroup}>
-          <Text style={styles.label}>Bill To:</Text>
           {invoice.client ? (
             <>
+              <Text style={styles.label}>Bill To:</Text>
               <Text style={[styles.value, { fontWeight: 'bold' }]}>{invoice.client.companyName || invoice.client.name}</Text>
               <Text style={styles.value}>{invoice.client.address || 'No address provided'}</Text>
               <Text style={styles.value}>{invoice.client.email}</Text>
             </>
+          ) : invoice.supplier ? (
+            <>
+              <Text style={styles.label}>Supplier:</Text>
+              <Text style={[styles.value, { fontWeight: 'bold' }]}>{invoice.supplier.companyName || invoice.supplier.name}</Text>
+              <Text style={styles.value}>{invoice.supplier.address || 'No address provided'}</Text>
+            </>
+          ) : invoice.subcontractor ? (
+            <>
+              <Text style={styles.label}>Subcontractor:</Text>
+              <Text style={[styles.value, { fontWeight: 'bold' }]}>{invoice.subcontractor.name}</Text>
+              <Text style={styles.value}>{invoice.subcontractor.address || 'No address provided'}</Text>
+            </>
           ) : (
-            <Text style={styles.value}>Client details unavailable</Text>
+            <>
+              <Text style={styles.label}>Bill To:</Text>
+              <Text style={styles.value}>Details unavailable</Text>
+            </>
           )}
         </View>
         <View style={[styles.infoGroup, { alignItems: 'flex-end' }]}>

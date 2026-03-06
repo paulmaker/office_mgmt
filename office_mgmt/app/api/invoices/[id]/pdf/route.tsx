@@ -28,6 +28,8 @@ export async function GET(
       where: { id },
       include: {
         client: true,
+        subcontractor: true,
+        supplier: true,
         entity: {
           include: {
             tenantAccount: true
