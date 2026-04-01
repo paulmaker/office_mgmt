@@ -104,6 +104,7 @@ export function PDFUpload({
         </div>
         {onRemove && (
           <Button
+            type="button"
             variant="ghost"
             size="sm"
             onClick={onRemove}
@@ -112,6 +113,7 @@ export function PDFUpload({
           </Button>
         )}
         <Button
+          type="button"
           variant="outline"
           size="sm"
           onClick={handleView}
@@ -136,6 +138,7 @@ export function PDFUpload({
           className="flex-1"
         />
         <Button
+          type="button"
           variant="outline"
           onClick={() => document.getElementById(inputId)?.click()}
           disabled={isUploading}
