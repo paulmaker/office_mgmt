@@ -39,7 +39,8 @@ import { useToast } from '@/hooks/use-toast'
 import { SortableHeader } from '@/components/ui/sortable-header'
 import { DateRangeFilter } from '@/components/ui/date-range-filter'
 import { sortData, filterByDateRange, toggleSort, type SortConfig } from '@/lib/sort-utils'
-import { Plus, Search, Download, Eye, Mail, Edit, Trash2, Loader2 } from 'lucide-react'
+import { Plus, Search, Download, Eye, Mail, Edit, Trash2, Loader2, Paperclip } from 'lucide-react'
+import { openStoredFileUrl } from '@/lib/open-stored-file-url'
 import type { Invoice } from '@prisma/client'
 
 type InvoiceWithRelations = Invoice & {
@@ -179,6 +180,7 @@ export default function InvoicesPage() {
     }
   }
 
+  /** System-generated invoice PDF (sales layout / purchase layout from app data). */
   const handleViewPdf = (id: string) => {
     window.open(`/api/invoices/${id}/pdf?preview=1`, '_blank')
   }
@@ -413,25 +415,30 @@ export default function InvoicesPage() {
                 <SortableHeader column="total" label="Total" sortConfig={sortConfig} onSort={handleSort} />
                 <SortableHeader column="outstanding" label="Outstanding" sortConfig={sortConfig} onSort={handleSort} />
                 <SortableHeader column="status" label="Status" sortConfig={sortConfig} onSort={handleSort} />
+                <TableHead className="text-center w-14" title="PDF uploaded with the invoice (e.g. supplier’s original)">
+                  <span className="sr-only">Attachment</span>
+                  <Paperclip className="inline h-4 w-4 text-muted-foreground" aria-hidden />
+                </TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8">
+                  <TableCell colSpan={11} className="text-center py-8">
                     <p className="text-gray-500">Loading invoices...</p>
                   </TableCell>
                 </TableRow>
               ) : filteredInvoices.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8">
+                  <TableCell colSpan={11} className="text-center py-8">
                     <p className="text-gray-500">No invoices found</p>
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredInvoices.map((invoice) => {
                   const outstanding = (invoice as any).outstandingAmount ?? (invoice.total - ((invoice as any).paidAmount ?? 0))
+                  const attachedKey = invoice.documentUrl?.trim() || null
                   return (
                     <TableRow key={invoice.id}>
                       <TableCell className="font-medium">
@@ -480,6 +487,22 @@ export default function InvoicesPage() {
                           {invoice.status}
                         </Badge>
                       </TableCell>
+                      <TableCell className="text-center">
+                        {attachedKey ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            title="Open attached PDF"
+                            onClick={() => openStoredFileUrl(attachedKey)}
+                          >
+                            <Paperclip className="h-4 w-4 text-blue-600" aria-hidden />
+                          </Button>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button
@@ -503,7 +526,7 @@ export default function InvoicesPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleViewPdf(invoice.id)}
-                          title="View PDF"
+                          title="Preview PDF generated from this record"
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -511,7 +534,7 @@ export default function InvoicesPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDownload(invoice.id)}
-                          title="Download PDF"
+                          title="Download generated PDF"
                         >
                           <Download className="h-4 w-4" />
                         </Button>

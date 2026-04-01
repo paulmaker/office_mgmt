@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useForm, useFieldArray } from 'react-hook-form'
+import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -469,11 +469,17 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
       {invoiceType === 'PURCHASE' && (
         <div className="space-y-2 p-4 bg-gray-50 rounded-lg border border-gray-200">
           <Label>Attach Invoice PDF</Label>
-          <PDFUpload
-            value={watch('documentUrl')}
-            onChange={(url) => setValue('documentUrl', url)}
-            onRemove={() => setValue('documentUrl', undefined)}
-            description="Attach a copy of the original invoice PDF for your records (max 50MB)."
+          <Controller
+            name="documentUrl"
+            control={control}
+            render={({ field }) => (
+              <PDFUpload
+                value={field.value}
+                onChange={field.onChange}
+                onRemove={() => field.onChange(undefined)}
+                description="Attach a copy of the original invoice PDF for your records (max 50MB)."
+              />
+            )}
           />
         </div>
       )}

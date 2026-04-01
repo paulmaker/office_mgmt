@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Upload, File, X, Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import { getUploadUrl } from '@/app/actions/upload'
+import { openStoredFileUrl } from '@/lib/open-stored-file-url'
 
 interface PDFUploadProps {
   value?: string
@@ -88,16 +89,7 @@ export function PDFUpload({
 
   const handleView = () => {
       if (!value) return
-      
-      // If it's a legacy base64 file (starts with data:), open directly
-      if (value.startsWith('data:') || value.startsWith('http')) {
-          window.open(value, '_blank')
-          return
-      }
-
-      // Otherwise it's an S3 key, use our secure proxy route
-      // We pass the key as the path
-      window.open(`/api/files/${value}`, '_blank')
+      openStoredFileUrl(value)
   }
 
   if (value) {
