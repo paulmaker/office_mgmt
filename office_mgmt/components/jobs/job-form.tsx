@@ -320,6 +320,7 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
             <option value="PENDING">Pending</option>
             <option value="IN_PROGRESS">In Progress</option>
             <option value="COMPLETE">Complete</option>
+            <option value="READY_TO_INVOICE">Ready to Invoice</option>
           </select>
         </div>
       </div>

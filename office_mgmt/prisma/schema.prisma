@@ -560,4 +560,5 @@ enum JobStatus {
   PENDING
   IN_PROGRESS
   COMPLETE
+  READY_TO_INVOICE
 }

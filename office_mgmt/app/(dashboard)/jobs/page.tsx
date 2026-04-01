@@ -205,6 +205,7 @@ export default function JobsPage() {
       if (activeTab === 'pending') return matchesSearch && job.status === 'PENDING'
       if (activeTab === 'in_progress') return matchesSearch && job.status === 'IN_PROGRESS'
       if (activeTab === 'complete') return matchesSearch && job.status === 'COMPLETE'
+      if (activeTab === 'ready_to_invoice') return matchesSearch && job.status === 'READY_TO_INVOICE'
 
       return matchesSearch
     })
@@ -228,6 +229,7 @@ export default function JobsPage() {
     pending: jobs.filter(j => j.status === 'PENDING').length,
     inProgress: jobs.filter(j => j.status === 'IN_PROGRESS').length,
     complete: jobs.filter(j => j.status === 'COMPLETE').length,
+    readyToInvoice: jobs.filter(j => j.status === 'READY_TO_INVOICE').length,
     totalValue: jobs.reduce((sum, j) => sum + j.price, 0),
     unpaidValue: jobs.filter(j => !j.invoicePaid).reduce((sum, j) => sum + j.price, 0),
   }
@@ -305,6 +307,12 @@ export default function JobsPage() {
                 className="pb-2 text-sm font-medium data-[state=active]:border-b-2 data-[state=active]:border-green-600 data-[state=active]:text-green-600"
               >
                 Complete
+              </Tabs.Trigger>
+              <Tabs.Trigger
+                value="ready_to_invoice"
+                className="pb-2 text-sm font-medium data-[state=active]:border-b-2 data-[state=active]:border-orange-600 data-[state=active]:text-orange-600"
+              >
+                Ready to Invoice ({stats.readyToInvoice})
               </Tabs.Trigger>
             </Tabs.List>
           </Tabs.Root>
