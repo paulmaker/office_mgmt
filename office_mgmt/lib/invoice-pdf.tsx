@@ -338,11 +338,20 @@ export function InvoicePDF({
           <Text style={styles.totalValue}>{formatCurrency(invoice.subtotal)}</Text>
         </View>
         
-        {invoice.vatAmount > 0 && (
+        {invoice.reverseCharge ? (
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>VAT ({invoice.vatRate}%)</Text>
-            <Text style={styles.totalValue}>{formatCurrency(invoice.vatAmount)}</Text>
+            <Text style={styles.totalLabel}>
+              VAT ({invoice.vatRate ?? 0}%) — Reverse charge
+            </Text>
+            <Text style={styles.totalValue}>{formatCurrency(invoice.vatAmount ?? 0)}</Text>
           </View>
+        ) : (
+          invoice.vatAmount > 0 && (
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>VAT ({invoice.vatRate}%)</Text>
+              <Text style={styles.totalValue}>{formatCurrency(invoice.vatAmount)}</Text>
+            </View>
+          )
         )}
 
         {invoice.cisDeduction > 0 && (
