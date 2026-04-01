@@ -27,6 +27,10 @@ const settingsSchema = z.object({
   vatReducedRate: z.coerce.number().default(5),
   isVatRegistered: z.boolean().default(false),
   
+  // Financial Year
+  financialYearStartMonth: z.coerce.number().min(1).max(12).default(4),
+  financialYearStartDay: z.coerce.number().min(1).max(31).default(1),
+
   // Invoice Footer
   invoicePaymentInfo: z.string().optional(),
   invoiceCompanyInfo: z.string().optional(),
@@ -72,6 +76,8 @@ export async function getSettings() {
     vatStandardRate: 20,
     vatReducedRate: 5,
     isVatRegistered: false,
+    financialYearStartMonth: 4,
+    financialYearStartDay: 1,
     invoicePaymentInfo: '',
     invoiceCompanyInfo: '',
     notifyInvoiceOverdue: true,

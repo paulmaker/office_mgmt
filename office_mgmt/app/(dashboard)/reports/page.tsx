@@ -8,6 +8,7 @@ import { startOfMonth, subMonths, format } from 'date-fns'
 import { ExportButton } from '@/components/reports/export-button'
 import { ReportDateFilter } from '@/components/reports/report-date-filter'
 import { requireModule } from '@/lib/module-access'
+import { getSettings } from '@/app/actions/settings'
 import { Suspense } from 'react'
 
 interface ReportsPageProps {
@@ -32,6 +33,11 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const params = await searchParams
   const now = new Date()
 
+  // Fetch financial year settings
+  const settings = await getSettings()
+  const fyStartMonth = (settings as any).financialYearStartMonth ?? 4
+  const fyStartDay = (settings as any).financialYearStartDay ?? 1
+
   const filterStart = params.from ? new Date(params.from + 'T00:00:00') : null
   const filterEnd = params.to ? new Date(params.to + 'T23:59:59') : null
   const hasDateFilter = filterStart || filterEnd
@@ -42,10 +48,9 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   }
   const hasDateWhere = Object.keys(dateWhere).length > 0
 
-  // Fallback dates for when no filter is applied
-  const currentQuarter = Math.floor((now.getMonth() + 3) / 3)
-  const quarterStartMonth = (currentQuarter - 1) * 3
-  const defaultQuarterStart = new Date(now.getFullYear(), quarterStartMonth, 1)
+  // Fallback dates for when no filter is applied (use financial quarter)
+  const { getFinancialQuarterStart } = await import('@/lib/financial-year')
+  const defaultQuarterStart = getFinancialQuarterStart(now, { startMonth: fyStartMonth, startDay: fyStartDay })
   const sixMonthsAgo = startOfMonth(subMonths(now, 5))
 
   // Fetch data in parallel
@@ -249,7 +254,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       <Card>
         <CardContent className="pt-6">
           <Suspense fallback={null}>
-            <ReportDateFilter />
+            <ReportDateFilter financialYearStartMonth={fyStartMonth} financialYearStartDay={fyStartDay} />
           </Suspense>
         </CardContent>
       </Card>

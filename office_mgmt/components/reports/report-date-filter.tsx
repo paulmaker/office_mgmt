@@ -4,10 +4,8 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { useCallback, useMemo } from 'react'
 import { Button } from '@/components/ui/button'
 import { X } from 'lucide-react'
-import {
-  startOfMonth, endOfMonth, startOfQuarter, endOfQuarter,
-  startOfYear, endOfYear, subMonths, subQuarters, subYears, format
-} from 'date-fns'
+import { format } from 'date-fns'
+import { presetToRange } from '@/lib/financial-year'
 
 type Preset = 'this-month' | 'last-month' | 'this-quarter' | 'last-quarter' | 'this-year' | 'last-year'
 
@@ -20,45 +18,15 @@ const PRESETS: { key: Preset; label: string }[] = [
   { key: 'last-year', label: 'Last Year' },
 ]
 
-function presetToRange(preset: Preset): { from: string; to: string } {
-  const now = new Date()
-  let start: Date
-  let end: Date
-
-  switch (preset) {
-    case 'this-month':
-      start = startOfMonth(now)
-      end = endOfMonth(now)
-      break
-    case 'last-month':
-      start = startOfMonth(subMonths(now, 1))
-      end = endOfMonth(subMonths(now, 1))
-      break
-    case 'this-quarter':
-      start = startOfQuarter(now)
-      end = endOfQuarter(now)
-      break
-    case 'last-quarter':
-      start = startOfQuarter(subQuarters(now, 1))
-      end = endOfQuarter(subQuarters(now, 1))
-      break
-    case 'this-year':
-      start = startOfYear(now)
-      end = endOfYear(now)
-      break
-    case 'last-year':
-      start = startOfYear(subYears(now, 1))
-      end = endOfYear(subYears(now, 1))
-      break
-  }
-
-  return {
-    from: format(start, 'yyyy-MM-dd'),
-    to: format(end, 'yyyy-MM-dd'),
-  }
+interface ReportDateFilterProps {
+  financialYearStartMonth?: number
+  financialYearStartDay?: number
 }
 
-export function ReportDateFilter() {
+export function ReportDateFilter({
+  financialYearStartMonth = 4,
+  financialYearStartDay = 1,
+}: ReportDateFilterProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -67,6 +35,11 @@ export function ReportDateFilter() {
   const currentTo = searchParams.get('to') || ''
   const currentPreset = searchParams.get('preset') || ''
   const hasFilter = currentFrom || currentTo
+
+  const fyConfig = useMemo(
+    () => ({ startMonth: financialYearStartMonth, startDay: financialYearStartDay }),
+    [financialYearStartMonth, financialYearStartDay]
+  )
 
   const updateParams = useCallback(
     (updates: Record<string, string>) => {
@@ -85,10 +58,10 @@ export function ReportDateFilter() {
 
   const handlePreset = useCallback(
     (preset: Preset) => {
-      const { from, to } = presetToRange(preset)
+      const { from, to } = presetToRange(preset, fyConfig)
       updateParams({ from, to, preset })
     },
-    [updateParams]
+    [updateParams, fyConfig]
   )
 
   const handleClear = useCallback(() => {
