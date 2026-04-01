@@ -31,7 +31,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { InvoiceForm } from '@/components/invoices/invoice-form'
-import { getInvoices, deleteInvoice, getInvoice } from '@/app/actions/invoices'
+import { getInvoices, deleteInvoice } from '@/app/actions/invoices'
 import { sendInvoiceEmail } from '@/app/actions/email'
 import { getEmailCcAddress } from '@/app/actions/settings'
 import { formatCurrency, formatDate, getInvoiceStatusColor } from '@/lib/utils'
@@ -58,6 +58,27 @@ type InvoiceWithRelations = Invoice & {
   outstandingAmount?: number | null
   paymentReference?: string | null
   paymentDate?: Date | null
+}
+
+/** NextResponse.json serializes Date as string; form code expects Date instances. */
+function invoiceFromApiJson(body: unknown): InvoiceWithRelations {
+  const inv = body as InvoiceWithRelations
+  const toDate = (v: unknown): Date | null | undefined => {
+    if (v == null) return v as null | undefined
+    if (v instanceof Date) return v
+    if (typeof v === 'string') return new Date(v)
+    return v as Date
+  }
+  return {
+    ...inv,
+    date: toDate(inv.date) as Date,
+    dueDate: toDate(inv.dueDate) as Date,
+    createdAt: toDate(inv.createdAt) as Date,
+    updatedAt: toDate(inv.updatedAt) as Date,
+    paymentDate: toDate(inv.paymentDate) ?? null,
+    sentDate: toDate(inv.sentDate) ?? null,
+    receivedDate: toDate(inv.receivedDate) ?? null,
+  }
 }
 
 export default function InvoicesPage() {
@@ -108,8 +129,16 @@ export default function InvoicesPage() {
 
   const handleEditClick = async (invoice: InvoiceWithRelations) => {
     try {
-      const fullInvoice = await getInvoice(invoice.id)
-      setEditingInvoice(fullInvoice as InvoiceWithRelations)
+      const res = await fetch(`/api/invoices/${encodeURIComponent(invoice.id)}`, {
+        credentials: 'same-origin',
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(
+          typeof body?.error === 'string' ? body.error : `Failed to load invoice (${res.status})`,
+        )
+      }
+      setEditingInvoice(invoiceFromApiJson(body))
       setIsDialogOpen(true)
     } catch (error) {
       toast({

@@ -8,6 +8,7 @@ import { revalidatePath } from 'next/cache'
 import { generateInvoiceNumber } from '@/lib/invoice-code'
 import type { InvoiceType, InvoiceStatus } from '@prisma/client'
 import { requireModule } from '@/lib/module-access'
+import { getInvoiceForSession } from '@/lib/get-invoice-for-session'
 
 interface InvoiceLineItem {
   jobId?: string
@@ -64,45 +65,7 @@ export async function getInvoices() {
  * Get a single invoice by ID
  */
 export async function getInvoice(id: string) {
-  const session = await auth()
-  if (!session?.user) {
-    throw new Error('Unauthorized')
-  }
-
-  const userId = session.user.id as string
-
-  // Check permission
-  const canRead = await hasPermission(userId, 'invoices', 'read')
-  if (!canRead) {
-    throw new Error('You do not have permission to view invoices')
-  }
-
-  // Get the invoice
-  const invoice = await prisma.invoice.findUnique({
-    where: { id },
-    include: {
-      client: true,
-      subcontractor: true,
-      supplier: true,
-      job: true,
-    },
-  })
-
-  if (!invoice) {
-    throw new Error('Invoice not found')
-  }
-
-  // Verify invoice belongs to current session entity
-  const entityId = requireSessionEntityId(session)
-  if (invoice.entityId !== entityId) {
-    throw new Error('You do not have permission to access this invoice')
-  }
-
-  // Calculate outstandingAmount
-  return {
-    ...invoice,
-    outstandingAmount: invoice.total - invoice.paidAmount,
-  }
+  return getInvoiceForSession(id)
 }
 
 /**
