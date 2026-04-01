@@ -136,12 +136,34 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
 
   const invoiceType = watch('type')
   const selectedClientId = watch('clientId')
+  const selectedSupplierId = watch('supplierId')
+  const invoiceDate = watch('date')
   const watchedLineItems = watch('lineItems')
   const reverseCharge = watch('reverseCharge')
   const vatRate = watch('vatRate')
   const discountType = watch('discountType')
   const discountAmount = watch('discountAmount') || 0
   const discountPercentage = watch('discountPercentage') || 0
+
+  // Auto-fill due date from client/supplier payment terms (new invoices only)
+  useEffect(() => {
+    if (invoice || !invoiceDate) return
+
+    let paymentTerms: number | undefined
+    if (invoiceType === 'SALES' && selectedClientId) {
+      const client = clients.find(c => c.id === selectedClientId)
+      paymentTerms = client?.paymentTerms
+    } else if (invoiceType === 'PURCHASE' && selectedSupplierId) {
+      const supplier = suppliers.find(s => s.id === selectedSupplierId)
+      paymentTerms = supplier?.paymentTerms
+    }
+
+    if (paymentTerms != null) {
+      const date = new Date(invoiceDate)
+      date.setDate(date.getDate() + paymentTerms)
+      setValue('dueDate', date.toISOString().split('T')[0])
+    }
+  }, [invoice, invoiceType, selectedClientId, selectedSupplierId, invoiceDate, clients, suppliers, setValue])
 
   // Calculate subtotal from line items
   let subtotal = watchedLineItems?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0
