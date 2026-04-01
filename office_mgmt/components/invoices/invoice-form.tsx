@@ -398,7 +398,10 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
                 className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
                 <option value="">Select a supplier</option>
-                {suppliers.map((supplier) => (
+                {suppliers
+                  .slice()
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((supplier) => (
                   <option key={supplier.id} value={supplier.id}>
                     {supplier.name}
                   </option>

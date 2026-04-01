@@ -9,7 +9,10 @@ const styles = StyleSheet.create({
   page: {
     flexDirection: 'column',
     backgroundColor: '#FFFFFF',
-    padding: 30,
+    paddingTop: 30,
+    paddingLeft: 30,
+    paddingRight: 30,
+    paddingBottom: 120,
     fontSize: 10,
     fontFamily: 'Helvetica',
   },
@@ -262,7 +265,7 @@ export const InvoicePDF = ({ invoice, entity, logoSrc, invoicePaymentInfo, invoi
       </View>
 
       {/* Totals */}
-      <View style={styles.totals}>
+      <View style={styles.totals} wrap={false}>
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>Subtotal</Text>
           <Text style={styles.totalValue}>{formatCurrency(invoice.subtotal)}</Text>
