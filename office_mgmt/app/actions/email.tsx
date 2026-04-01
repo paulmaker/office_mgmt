@@ -32,6 +32,7 @@ export async function sendInvoiceEmail(invoiceId: string, sendCopy = true) {
       where: { id: invoiceId },
       include: {
         client: true,
+        job: true,
         entity: {
           include: {
             tenantAccount: true
