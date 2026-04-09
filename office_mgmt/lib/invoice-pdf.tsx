@@ -343,7 +343,7 @@ export function InvoicePDF({
             <Text style={styles.totalLabel}>
               VAT ({invoice.vatRate ?? 0}%) — Reverse charge
             </Text>
-            <Text style={styles.totalValue}>{formatCurrency(invoice.vatAmount ?? 0)}</Text>
+            <Text style={styles.totalValue}>{formatCurrency((invoice.subtotal || 0) * ((invoice.vatRate || 0) / 100))}</Text>
           </View>
         ) : (
           invoice.vatAmount > 0 && (

@@ -177,7 +177,8 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
   }
   subtotal = subtotal - discount
   
-  const vatAmount = reverseCharge ? 0 : subtotal * ((vatRate || 0) / 100)
+  const notionalVat = subtotal * ((vatRate || 0) / 100)
+  const vatAmount = reverseCharge ? 0 : notionalVat
   const cisDeduction = watch('cisDeduction') || 0
   const total = subtotal + vatAmount - cisDeduction
 
@@ -334,7 +335,7 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
       append({
         jobId: job.id,
         jobNumber: job.jobNumber,
-        description: `${job.jobNumber} - ${lineItem.description}`,
+        description: `${lineItem.address} - ${lineItem.description}`,
         amount: lineItem.amount,
       })
     })
@@ -748,7 +749,9 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
                     </td>
                     <td className="px-3 py-2.5">
                       {reverseCharge ? (
-                        <span className="text-sm text-gray-500">£0.00 (Reverse Charge)</span>
+                        <span className="text-sm text-gray-500">
+                          VAT ({vatRate}%): {formatCurrency(notionalVat)} (Reverse Charge)
+                        </span>
                       ) : (
                         <span className="text-sm font-medium">
                           VAT ({vatRate}%): {formatCurrency(vatAmount)}
