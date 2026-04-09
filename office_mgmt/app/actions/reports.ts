@@ -144,7 +144,10 @@ export async function exportVATSummary(startDate?: Date, endDate?: Date) {
         invoiceNumber: true, 
         date: true, 
         total: true, 
+        subtotal: true,
         vatAmount: true,
+        vatRate: true,
+        reverseCharge: true,
         client: { select: { name: true, companyName: true } }
       }
     }),
@@ -159,7 +162,10 @@ export async function exportVATSummary(startDate?: Date, endDate?: Date) {
         invoiceNumber: true, 
         date: true, 
         total: true, 
+        subtotal: true,
         vatAmount: true,
+        vatRate: true,
+        reverseCharge: true,
         supplier: { select: { name: true, companyName: true } }
       }
     })
@@ -169,43 +175,95 @@ export async function exportVATSummary(startDate?: Date, endDate?: Date) {
   const totalInputVAT = vatPurchases.reduce((sum, inv) => sum + (inv.vatAmount || 0), 0)
   const vatToPay = totalOutputVAT - totalInputVAT
 
-  const headers = ['Type', 'Invoice Number', 'Date', 'Customer/Supplier', 'Total', 'VAT Amount']
+  const reverseChargeNotional = (subtotal: number, vatRate: number) =>
+    (subtotal || 0) * ((vatRate || 0) / 100)
+
+  const reverseChargeNotionalSales = vatSales.reduce(
+    (sum, inv) =>
+      inv.reverseCharge ? sum + reverseChargeNotional(inv.subtotal || 0, inv.vatRate || 0) : sum,
+    0
+  )
+  const reverseChargeNotionalPurchases = vatPurchases.reduce(
+    (sum, inv) =>
+      inv.reverseCharge ? sum + reverseChargeNotional(inv.subtotal || 0, inv.vatRate || 0) : sum,
+    0
+  )
+
+  const emptyTail = ['', ''] as const
+  const headers = [
+    'Type',
+    'Invoice Number',
+    'Date',
+    'Customer/Supplier',
+    'Total',
+    'VAT Amount',
+    'Reverse charge',
+    'Notional VAT',
+  ]
   const rows: (string | number)[][] = []
 
   // Add summary row
-  rows.push(['SUMMARY', '', '', '', '', ''])
-  rows.push(['Output VAT (Sales)', '', '', '', '', formatCurrencyForCSV(totalOutputVAT)])
-  rows.push(['Input VAT (Purchases)', '', '', '', '', formatCurrencyForCSV(totalInputVAT)])
-  rows.push(['VAT to Pay/Reclaim', '', '', '', '', formatCurrencyForCSV(vatToPay)])
-  rows.push(['', '', '', '', '', ''])
+  rows.push(['SUMMARY', '', '', '', '', '', '', ''])
+  rows.push(['Output VAT (Sales)', '', '', '', '', formatCurrencyForCSV(totalOutputVAT), ...emptyTail])
+  rows.push(['Input VAT (Purchases)', '', '', '', '', formatCurrencyForCSV(totalInputVAT), ...emptyTail])
+  rows.push([
+    'Reverse charge — notional VAT (sales)',
+    '',
+    '',
+    '',
+    '',
+    formatCurrencyForCSV(reverseChargeNotionalSales),
+    ...emptyTail,
+  ])
+  rows.push([
+    'Reverse charge — notional VAT (purchases)',
+    '',
+    '',
+    '',
+    '',
+    formatCurrencyForCSV(reverseChargeNotionalPurchases),
+    ...emptyTail,
+  ])
+  rows.push(['VAT to Pay/Reclaim', '', '', '', '', formatCurrencyForCSV(vatToPay), ...emptyTail])
+  rows.push(['', '', '', '', '', '', '', ''])
 
   // Add sales invoices
-  rows.push(['SALES INVOICES', '', '', '', '', ''])
+  rows.push(['SALES INVOICES', '', '', '', '', '', '', ''])
   vatSales.forEach(inv => {
     const customerName = inv.client?.companyName || inv.client?.name || 'N/A'
+    const notional = inv.reverseCharge
+      ? reverseChargeNotional(inv.subtotal || 0, inv.vatRate || 0)
+      : 0
     rows.push([
       'Sales',
       inv.invoiceNumber,
       formatDate(inv.date),
       customerName,
       formatCurrencyForCSV(inv.total),
-      formatCurrencyForCSV(inv.vatAmount || 0)
+      formatCurrencyForCSV(inv.vatAmount || 0),
+      inv.reverseCharge ? 'Yes' : 'No',
+      inv.reverseCharge ? formatCurrencyForCSV(notional) : '',
     ])
   })
 
-  rows.push(['', '', '', '', '', ''])
+  rows.push(['', '', '', '', '', '', '', ''])
 
   // Add purchase invoices
-  rows.push(['PURCHASE INVOICES', '', '', '', '', ''])
+  rows.push(['PURCHASE INVOICES', '', '', '', '', '', '', ''])
   vatPurchases.forEach(inv => {
     const supplierName = inv.supplier?.companyName || inv.supplier?.name || 'N/A'
+    const notional = inv.reverseCharge
+      ? reverseChargeNotional(inv.subtotal || 0, inv.vatRate || 0)
+      : 0
     rows.push([
       'Purchase',
       inv.invoiceNumber,
       formatDate(inv.date),
       supplierName,
       formatCurrencyForCSV(inv.total),
-      formatCurrencyForCSV(inv.vatAmount || 0)
+      formatCurrencyForCSV(inv.vatAmount || 0),
+      inv.reverseCharge ? 'Yes' : 'No',
+      inv.reverseCharge ? formatCurrencyForCSV(notional) : '',
     ])
   })
 

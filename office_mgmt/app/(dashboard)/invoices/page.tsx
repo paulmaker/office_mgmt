@@ -31,7 +31,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { InvoiceForm } from '@/components/invoices/invoice-form'
-import { getInvoices, deleteInvoice, getInvoice } from '@/app/actions/invoices'
+import { getInvoices, deleteInvoice } from '@/app/actions/invoices'
 import { sendInvoiceEmail } from '@/app/actions/email'
 import { getEmailCcAddress } from '@/app/actions/settings'
 import { formatCurrency, formatDate, getInvoiceStatusColor } from '@/lib/utils'
@@ -39,7 +39,8 @@ import { useToast } from '@/hooks/use-toast'
 import { SortableHeader } from '@/components/ui/sortable-header'
 import { DateRangeFilter } from '@/components/ui/date-range-filter'
 import { sortData, filterByDateRange, toggleSort, type SortConfig } from '@/lib/sort-utils'
-import { Plus, Search, Download, Eye, Mail, Edit, Trash2, Loader2 } from 'lucide-react'
+import { Plus, Search, Download, Eye, Mail, Edit, Trash2, Loader2, Paperclip } from 'lucide-react'
+import { openStoredFileUrl } from '@/lib/open-stored-file-url'
 import type { Invoice } from '@prisma/client'
 
 type InvoiceWithRelations = Invoice & {
@@ -58,6 +59,27 @@ type InvoiceWithRelations = Invoice & {
   outstandingAmount?: number | null
   paymentReference?: string | null
   paymentDate?: Date | null
+}
+
+/** NextResponse.json serializes Date as string; form code expects Date instances. */
+function invoiceFromApiJson(body: unknown): InvoiceWithRelations {
+  const inv = body as InvoiceWithRelations
+  const toDate = (v: unknown): Date | null | undefined => {
+    if (v == null) return v as null | undefined
+    if (v instanceof Date) return v
+    if (typeof v === 'string') return new Date(v)
+    return v as Date
+  }
+  return {
+    ...inv,
+    date: toDate(inv.date) as Date,
+    dueDate: toDate(inv.dueDate) as Date,
+    createdAt: toDate(inv.createdAt) as Date,
+    updatedAt: toDate(inv.updatedAt) as Date,
+    paymentDate: toDate(inv.paymentDate) ?? null,
+    sentDate: toDate(inv.sentDate) ?? null,
+    receivedDate: toDate(inv.receivedDate) ?? null,
+  }
 }
 
 export default function InvoicesPage() {
@@ -108,8 +130,16 @@ export default function InvoicesPage() {
 
   const handleEditClick = async (invoice: InvoiceWithRelations) => {
     try {
-      const fullInvoice = await getInvoice(invoice.id)
-      setEditingInvoice(fullInvoice as InvoiceWithRelations)
+      const res = await fetch(`/api/invoices/${encodeURIComponent(invoice.id)}`, {
+        credentials: 'same-origin',
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(
+          typeof body?.error === 'string' ? body.error : `Failed to load invoice (${res.status})`,
+        )
+      }
+      setEditingInvoice(invoiceFromApiJson(body))
       setIsDialogOpen(true)
     } catch (error) {
       toast({
@@ -150,6 +180,7 @@ export default function InvoicesPage() {
     }
   }
 
+  /** System-generated invoice PDF (sales layout / purchase layout from app data). */
   const handleViewPdf = (id: string) => {
     window.open(`/api/invoices/${id}/pdf?preview=1`, '_blank')
   }
@@ -384,25 +415,30 @@ export default function InvoicesPage() {
                 <SortableHeader column="total" label="Total" sortConfig={sortConfig} onSort={handleSort} />
                 <SortableHeader column="outstanding" label="Outstanding" sortConfig={sortConfig} onSort={handleSort} />
                 <SortableHeader column="status" label="Status" sortConfig={sortConfig} onSort={handleSort} />
+                <TableHead className="text-center w-14" title="PDF uploaded with the invoice (e.g. supplier’s original)">
+                  <span className="sr-only">Attachment</span>
+                  <Paperclip className="inline h-4 w-4 text-muted-foreground" aria-hidden />
+                </TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8">
+                  <TableCell colSpan={11} className="text-center py-8">
                     <p className="text-gray-500">Loading invoices...</p>
                   </TableCell>
                 </TableRow>
               ) : filteredInvoices.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8">
+                  <TableCell colSpan={11} className="text-center py-8">
                     <p className="text-gray-500">No invoices found</p>
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredInvoices.map((invoice) => {
                   const outstanding = (invoice as any).outstandingAmount ?? (invoice.total - ((invoice as any).paidAmount ?? 0))
+                  const attachedKey = invoice.documentUrl?.trim() || null
                   return (
                     <TableRow key={invoice.id}>
                       <TableCell className="font-medium">
@@ -451,6 +487,22 @@ export default function InvoicesPage() {
                           {invoice.status}
                         </Badge>
                       </TableCell>
+                      <TableCell className="text-center">
+                        {attachedKey ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            title="Open attached PDF"
+                            onClick={() => openStoredFileUrl(attachedKey)}
+                          >
+                            <Paperclip className="h-4 w-4 text-blue-600" aria-hidden />
+                          </Button>
+                        ) : (
+                          <span className="text-gray-300">—</span>
+                        )}
+                      </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
                         <Button
@@ -474,7 +526,7 @@ export default function InvoicesPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleViewPdf(invoice.id)}
-                          title="View PDF"
+                          title="Preview PDF generated from this record"
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -482,7 +534,7 @@ export default function InvoicesPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleDownload(invoice.id)}
-                          title="Download PDF"
+                          title="Download generated PDF"
                         >
                           <Download className="h-4 w-4" />
                         </Button>

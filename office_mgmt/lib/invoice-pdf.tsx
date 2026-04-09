@@ -9,7 +9,10 @@ const styles = StyleSheet.create({
   page: {
     flexDirection: 'column',
     backgroundColor: '#FFFFFF',
-    padding: 30,
+    paddingTop: 30,
+    paddingLeft: 30,
+    paddingRight: 30,
+    paddingBottom: 120,
     fontSize: 10,
     fontFamily: 'Helvetica',
   },
@@ -87,6 +90,19 @@ const styles = StyleSheet.create({
   colQty: { width: '15%', textAlign: 'right' },
   colRate: { width: '15%', textAlign: 'right' },
   colAmount: { width: '20%', textAlign: 'right' },
+  /** Sales layout: Job # + description + qty + rate + amount */
+  colJob: { width: '14%', paddingRight: 6 },
+  colDescSales: { width: '36%' },
+  colQtySales: { width: '12%', textAlign: 'right' },
+  colRateSales: { width: '13%', textAlign: 'right' },
+  colAmountSales: { width: '25%', textAlign: 'right' },
+  jobReference: {
+    marginTop: 14,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#EEEEEE',
+    width: '100%',
+  },
   
   totals: {
     marginTop: 20,
@@ -169,7 +185,17 @@ interface InvoicePDFProps {
   invoiceCompanyInfo?: string
 }
 
-export const InvoicePDF = ({ invoice, entity, logoSrc, invoicePaymentInfo, invoiceCompanyInfo }: InvoicePDFProps) => (
+export function InvoicePDF({
+  invoice,
+  entity,
+  logoSrc,
+  invoicePaymentInfo,
+  invoiceCompanyInfo,
+}: InvoicePDFProps) {
+  const isSales = invoice.type === 'SALES'
+  const lineItems = Array.isArray(invoice.lineItems) ? invoice.lineItems : []
+
+  return (
   <Document>
     <Page size="A4" style={styles.page}>
       {/* Header */}
@@ -237,42 +263,95 @@ export const InvoicePDF = ({ invoice, entity, logoSrc, invoicePaymentInfo, invoi
         </View>
       </View>
 
+      {isSales && invoice.job && (
+        <View style={styles.jobReference}>
+          <Text style={styles.label}>Linked job</Text>
+          <Text style={styles.value}>
+            {invoice.job.jobNumber}
+            {invoice.job.jobDescription ? ` — ${invoice.job.jobDescription}` : ''}
+          </Text>
+        </View>
+      )}
+
       {/* Table */}
       <View style={styles.table}>
         <View style={styles.tableHeader}>
-          <Text style={styles.colDesc}>Description</Text>
-          <Text style={styles.colQty}>Qty</Text>
-          <Text style={styles.colRate}>Rate</Text>
-          <Text style={styles.colAmount}>Amount</Text>
+          {isSales ? (
+            <>
+              <Text style={styles.colJob}>Job #</Text>
+              <Text style={styles.colDescSales}>Description</Text>
+              <Text style={styles.colQtySales}>Qty</Text>
+              <Text style={styles.colRateSales}>Rate</Text>
+              <Text style={styles.colAmountSales}>Amount</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.colDesc}>Description</Text>
+              <Text style={styles.colQty}>Qty</Text>
+              <Text style={styles.colRate}>Rate</Text>
+              <Text style={styles.colAmount}>Amount</Text>
+            </>
+          )}
         </View>
-        
-        {invoice.lineItems.map((item: any, index: number) => {
-          // Handle missing quantity/rate: default to 1 qty and derive rate from amount
-          const quantity = item.quantity ?? 1
-          const rate = item.rate ?? item.amount
+
+        {lineItems.map((item: unknown, index: number) => {
+          const it = item as {
+            description?: string
+            quantity?: number
+            rate?: number
+            amount?: number
+            jobNumber?: string
+          }
+          const quantity = it.quantity ?? 1
+          const rate = it.rate ?? it.amount ?? 0
+          const desc = it.description?.trim() ? it.description : '—'
+          const amount = typeof it.amount === 'number' ? it.amount : 0
+          const jobCell =
+            it.jobNumber && String(it.jobNumber).trim() ? String(it.jobNumber).trim() : '—'
           return (
             <View key={index} style={styles.tableRow}>
-              <Text style={styles.colDesc}>{item.description}</Text>
-              <Text style={styles.colQty}>{quantity}</Text>
-              <Text style={styles.colRate}>{formatCurrency(rate)}</Text>
-              <Text style={styles.colAmount}>{formatCurrency(item.amount)}</Text>
+              {isSales ? (
+                <>
+                  <Text style={styles.colJob}>{jobCell}</Text>
+                  <Text style={styles.colDescSales}>{desc}</Text>
+                  <Text style={styles.colQtySales}>{quantity}</Text>
+                  <Text style={styles.colRateSales}>{formatCurrency(rate)}</Text>
+                  <Text style={styles.colAmountSales}>{formatCurrency(amount)}</Text>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.colDesc}>{desc}</Text>
+                  <Text style={styles.colQty}>{quantity}</Text>
+                  <Text style={styles.colRate}>{formatCurrency(rate)}</Text>
+                  <Text style={styles.colAmount}>{formatCurrency(amount)}</Text>
+                </>
+              )}
             </View>
           )
         })}
       </View>
 
       {/* Totals */}
-      <View style={styles.totals}>
+      <View style={styles.totals} wrap={false}>
         <View style={styles.totalRow}>
           <Text style={styles.totalLabel}>Subtotal</Text>
           <Text style={styles.totalValue}>{formatCurrency(invoice.subtotal)}</Text>
         </View>
         
-        {invoice.vatAmount > 0 && (
+        {invoice.reverseCharge ? (
           <View style={styles.totalRow}>
-            <Text style={styles.totalLabel}>VAT ({invoice.vatRate}%)</Text>
-            <Text style={styles.totalValue}>{formatCurrency(invoice.vatAmount)}</Text>
+            <Text style={styles.totalLabel}>
+              VAT ({invoice.vatRate ?? 0}%) — Reverse charge
+            </Text>
+            <Text style={styles.totalValue}>{formatCurrency((invoice.subtotal || 0) * ((invoice.vatRate || 0) / 100))}</Text>
           </View>
+        ) : (
+          invoice.vatAmount > 0 && (
+            <View style={styles.totalRow}>
+              <Text style={styles.totalLabel}>VAT ({invoice.vatRate}%)</Text>
+              <Text style={styles.totalValue}>{formatCurrency(invoice.vatAmount)}</Text>
+            </View>
+          )
         )}
 
         {invoice.cisDeduction > 0 && (
@@ -315,4 +394,5 @@ export const InvoicePDF = ({ invoice, entity, logoSrc, invoicePaymentInfo, invoi
       </View>
     </Page>
   </Document>
-)
+  )
+}

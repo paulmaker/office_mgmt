@@ -30,6 +30,7 @@ export async function GET(
         client: true,
         subcontractor: true,
         supplier: true,
+        job: true,
         entity: {
           include: {
             tenantAccount: true

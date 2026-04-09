@@ -8,6 +8,7 @@ import { startOfMonth, subMonths, format } from 'date-fns'
 import { ExportButton } from '@/components/reports/export-button'
 import { ReportDateFilter } from '@/components/reports/report-date-filter'
 import { requireModule } from '@/lib/module-access'
+import { getSettings } from '@/app/actions/settings'
 import { Suspense } from 'react'
 
 interface ReportsPageProps {
@@ -32,6 +33,11 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const params = await searchParams
   const now = new Date()
 
+  // Fetch financial year settings
+  const settings = await getSettings()
+  const fyStartMonth = (settings as any).financialYearStartMonth ?? 4
+  const fyStartDay = (settings as any).financialYearStartDay ?? 1
+
   const filterStart = params.from ? new Date(params.from + 'T00:00:00') : null
   const filterEnd = params.to ? new Date(params.to + 'T23:59:59') : null
   const hasDateFilter = filterStart || filterEnd
@@ -42,10 +48,9 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   }
   const hasDateWhere = Object.keys(dateWhere).length > 0
 
-  // Fallback dates for when no filter is applied
-  const currentQuarter = Math.floor((now.getMonth() + 3) / 3)
-  const quarterStartMonth = (currentQuarter - 1) * 3
-  const defaultQuarterStart = new Date(now.getFullYear(), quarterStartMonth, 1)
+  // Fallback dates for when no filter is applied (use financial quarter)
+  const { getFinancialQuarterStart } = await import('@/lib/financial-year')
+  const defaultQuarterStart = getFinancialQuarterStart(now, { startMonth: fyStartMonth, startDay: fyStartDay })
   const sixMonthsAgo = startOfMonth(subMonths(now, 5))
 
   // Fetch data in parallel
@@ -55,6 +60,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
     timesheetExpenses,
     vatSales,
     vatPurchases,
+    reverseChargeInvoices,
     cisTimesheets,
     monthlySales,
     monthlyPurchases,
@@ -94,6 +100,16 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
         status: 'PAID',
         date: hasDateWhere ? dateWhere : { gte: defaultQuarterStart }
       }
+    }),
+
+    prisma.invoice.findMany({
+      where: {
+        entityId,
+        status: 'PAID',
+        reverseCharge: true,
+        date: hasDateWhere ? dateWhere : { gte: defaultQuarterStart },
+      },
+      select: { subtotal: true, vatRate: true, type: true },
     }),
 
     // 3. CIS Summary
@@ -138,11 +154,21 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
   const profitMargin = totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(1) : '0'
 
   // --- Process VAT Summary ---
+  let reverseChargeNotionalSales = 0
+  let reverseChargeNotionalPurchases = 0
+  for (const inv of reverseChargeInvoices) {
+    const notional = (inv.subtotal || 0) * ((inv.vatRate || 0) / 100)
+    if (inv.type === 'SALES') reverseChargeNotionalSales += notional
+    if (inv.type === 'PURCHASE') reverseChargeNotionalPurchases += notional
+  }
+
   const vatSummary = {
     totalOutputVAT: vatSales._sum.vatAmount || 0,
     totalInputVAT: vatPurchases._sum.vatAmount || 0,
     salesCount: vatSales._count,
-    purchasesCount: vatPurchases._count
+    purchasesCount: vatPurchases._count,
+    reverseChargeNotionalSales,
+    reverseChargeNotionalPurchases,
   }
 
   // --- Process CIS Summary ---
@@ -228,7 +254,7 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
       <Card>
         <CardContent className="pt-6">
           <Suspense fallback={null}>
-            <ReportDateFilter />
+            <ReportDateFilter financialYearStartMonth={fyStartMonth} financialYearStartDay={fyStartDay} />
           </Suspense>
         </CardContent>
       </Card>
@@ -346,6 +372,17 @@ export default async function ReportsPage({ searchParams }: ReportsPageProps) {
                 <span className="font-medium">Input VAT (Purchases)</span>
                 <span className="font-bold">({formatCurrency(vatSummary.totalInputVAT)})</span>
               </div>
+              <div className="flex justify-between items-center pb-2 border-b text-sm">
+                <span className="font-medium text-gray-700">Reverse charge — notional VAT (sales)</span>
+                <span className="font-semibold">{formatCurrency(vatSummary.reverseChargeNotionalSales)}</span>
+              </div>
+              <div className="flex justify-between items-center pb-2 border-b text-sm">
+                <span className="font-medium text-gray-700">Reverse charge — notional VAT (purchases)</span>
+                <span className="font-semibold">{formatCurrency(vatSummary.reverseChargeNotionalPurchases)}</span>
+              </div>
+              <p className="text-xs text-gray-500 -mt-2">
+                Notional figures for disclosure only; excluded from VAT to Pay/Reclaim.
+              </p>
               <div className="flex justify-between items-center pb-2 border-b bg-blue-50 -mx-2 px-2 py-2 rounded">
                 <span className="font-medium text-lg">VAT to Pay/Reclaim</span>
                 <span className="text-blue-600 font-bold text-lg">

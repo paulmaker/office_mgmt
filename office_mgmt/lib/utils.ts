@@ -87,6 +87,7 @@ export function getJobStatusColor(status: string): string {
     PENDING: 'text-yellow-600 bg-yellow-100',
     IN_PROGRESS: 'text-blue-600 bg-blue-100',
     COMPLETE: 'text-green-600 bg-green-100',
+    READY_TO_INVOICE: 'text-orange-600 bg-orange-100',
   }
   return colors[status] || 'text-gray-500 bg-gray-100'
 }

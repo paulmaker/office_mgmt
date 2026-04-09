@@ -33,7 +33,7 @@ import { SubcontractorForm } from '@/components/subcontractors/subcontractor-for
 import { getSubcontractors, deleteSubcontractor } from '@/app/actions/subcontractors'
 import { formatDate } from '@/lib/utils'
 import { useToast } from '@/hooks/use-toast'
-import { Plus, Search, Edit, Mail, Phone, MapPin, Trash2 } from 'lucide-react'
+import { Plus, Search, Edit, Mail, Phone, MapPin, Trash2, Download } from 'lucide-react'
 import type { Subcontractor } from '@prisma/client'
 
 export default function SubcontractorsPage() {
@@ -125,6 +125,46 @@ export default function SubcontractorsPage() {
     subcontractor.niNumber?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
+  const handleExportCSV = () => {
+    const escape = (val: string) => {
+      if (!val) return ''
+      if (val.includes(',') || val.includes('"') || val.includes('\n')) {
+        return `"${val.replace(/"/g, '""')}"`
+      }
+      return val
+    }
+
+    const headers = ['Name', 'Email', 'Phone', 'Address', 'NI Number', 'UTR', 'CIS Verification No', 'CIS Status', 'Payment Type', 'Car Reg', 'Notes']
+    const rows = filteredSubcontractors.map(s => [
+      s.name,
+      s.email,
+      s.phone || '',
+      s.address || '',
+      s.niNumber || '',
+      s.utr || '',
+      s.cisVerificationNumber || '',
+      s.cisStatus.replace('_', ' '),
+      s.paymentType,
+      s.car || '',
+      s.notes || '',
+    ].map(escape))
+
+    const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    link.setAttribute('href', URL.createObjectURL(blob))
+    link.setAttribute('download', `subcontractors-${new Date().toISOString().split('T')[0]}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+
+    toast({
+      title: 'Export successful',
+      description: `${filteredSubcontractors.length} subcontractor(s) exported as CSV.`,
+    })
+  }
+
   const getCISStatusBadge = (status: string) => {
     switch (status) {
       case 'VERIFIED_GROSS':
@@ -147,10 +187,16 @@ export default function SubcontractorsPage() {
             Manage your subcontractor database and CIS information
           </p>
         </div>
-        <Button onClick={handleCreateClick}>
-          <Plus className="h-4 w-4 mr-2" />
-          Add Subcontractor
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExportCSV} disabled={filteredSubcontractors.length === 0}>
+            <Download className="h-4 w-4 mr-2" />
+            Download CSV
+          </Button>
+          <Button onClick={handleCreateClick}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Subcontractor
+          </Button>
+        </div>
       </div>
 
       <Card>

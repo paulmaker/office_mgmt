@@ -1,11 +1,11 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useForm, useFieldArray } from 'react-hook-form'
+import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { createInvoice, updateInvoice, getInvoice } from '@/app/actions/invoices'
+import { createInvoice, updateInvoice } from '@/app/actions/invoices'
 import { getClients } from '@/app/actions/clients'
 import { getSubcontractors } from '@/app/actions/subcontractors'
 import { getSuppliers } from '@/app/actions/suppliers'
@@ -136,12 +136,34 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
 
   const invoiceType = watch('type')
   const selectedClientId = watch('clientId')
+  const selectedSupplierId = watch('supplierId')
+  const invoiceDate = watch('date')
   const watchedLineItems = watch('lineItems')
   const reverseCharge = watch('reverseCharge')
   const vatRate = watch('vatRate')
   const discountType = watch('discountType')
   const discountAmount = watch('discountAmount') || 0
   const discountPercentage = watch('discountPercentage') || 0
+
+  // Auto-fill due date from client/supplier payment terms (new invoices only)
+  useEffect(() => {
+    if (invoice || !invoiceDate) return
+
+    let paymentTerms: number | undefined
+    if (invoiceType === 'SALES' && selectedClientId) {
+      const client = clients.find(c => c.id === selectedClientId)
+      paymentTerms = client?.paymentTerms
+    } else if (invoiceType === 'PURCHASE' && selectedSupplierId) {
+      const supplier = suppliers.find(s => s.id === selectedSupplierId)
+      paymentTerms = supplier?.paymentTerms
+    }
+
+    if (paymentTerms != null) {
+      const date = new Date(invoiceDate)
+      date.setDate(date.getDate() + paymentTerms)
+      setValue('dueDate', date.toISOString().split('T')[0])
+    }
+  }, [invoice, invoiceType, selectedClientId, selectedSupplierId, invoiceDate, clients, suppliers, setValue])
 
   // Calculate subtotal from line items
   let subtotal = watchedLineItems?.reduce((sum, item) => sum + (item.amount || 0), 0) || 0
@@ -155,7 +177,8 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
   }
   subtotal = subtotal - discount
   
-  const vatAmount = reverseCharge ? 0 : subtotal * ((vatRate || 0) / 100)
+  const notionalVat = subtotal * ((vatRate || 0) / 100)
+  const vatAmount = reverseCharge ? 0 : notionalVat
   const cisDeduction = watch('cisDeduction') || 0
   const total = subtotal + vatAmount - cisDeduction
 
@@ -312,7 +335,7 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
       append({
         jobId: job.id,
         jobNumber: job.jobNumber,
-        description: `${job.jobNumber} - ${lineItem.description}`,
+        description: `${lineItem.address} - ${lineItem.description}`,
         amount: lineItem.amount,
       })
     })
@@ -398,7 +421,10 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
                 className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
               >
                 <option value="">Select a supplier</option>
-                {suppliers.map((supplier) => (
+                {suppliers
+                  .slice()
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((supplier) => (
                   <option key={supplier.id} value={supplier.id}>
                     {supplier.name}
                   </option>
@@ -466,11 +492,17 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
       {invoiceType === 'PURCHASE' && (
         <div className="space-y-2 p-4 bg-gray-50 rounded-lg border border-gray-200">
           <Label>Attach Invoice PDF</Label>
-          <PDFUpload
-            value={watch('documentUrl')}
-            onChange={(url) => setValue('documentUrl', url)}
-            onRemove={() => setValue('documentUrl', undefined)}
-            description="Attach a copy of the original invoice PDF for your records (max 50MB)."
+          <Controller
+            name="documentUrl"
+            control={control}
+            render={({ field }) => (
+              <PDFUpload
+                value={field.value}
+                onChange={field.onChange}
+                onRemove={() => field.onChange(undefined)}
+                description="Attach a copy of the original invoice PDF for your records (max 50MB)."
+              />
+            )}
           />
         </div>
       )}
@@ -717,7 +749,9 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
                     </td>
                     <td className="px-3 py-2.5">
                       {reverseCharge ? (
-                        <span className="text-sm text-gray-500">£0.00 (Reverse Charge)</span>
+                        <span className="text-sm text-gray-500">
+                          VAT ({vatRate}%): {formatCurrency(notionalVat)} (Reverse Charge)
+                        </span>
                       ) : (
                         <span className="text-sm font-medium">
                           VAT ({vatRate}%): {formatCurrency(vatAmount)}

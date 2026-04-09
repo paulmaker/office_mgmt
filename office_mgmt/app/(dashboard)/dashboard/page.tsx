@@ -13,6 +13,7 @@ import {
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/app/api/auth/[...nextauth]/route'
 import { redirect } from 'next/navigation'
+import { getFinancialQuarterStart } from '@/lib/financial-year'
 
 export default async function DashboardPage() {
   const session = await auth()
@@ -22,11 +23,18 @@ export default async function DashboardPage() {
 
   const entityId = session.user.entityId
 
-  // Calculate start of current quarter for VAT
+  // Get financial year settings for quarter calculation
+  const entity = await prisma.entity.findUnique({
+    where: { id: entityId },
+    select: { settings: true }
+  })
+  const entitySettings = (entity?.settings as Record<string, unknown>) || {}
+  const fyStartMonth = (entitySettings.financialYearStartMonth as number) ?? 4
+  const fyStartDay = (entitySettings.financialYearStartDay as number) ?? 1
+
+  // Calculate start of current financial quarter for VAT
   const now = new Date()
-  const currentQuarter = Math.floor((now.getMonth() + 3) / 3)
-  const quarterStartMonth = (currentQuarter - 1) * 3
-  const quarterStartDate = new Date(now.getFullYear(), quarterStartMonth, 1)
+  const quarterStartDate = getFinancialQuarterStart(now, { startMonth: fyStartMonth, startDay: fyStartDay })
 
   // Fetch all data in parallel
   const [

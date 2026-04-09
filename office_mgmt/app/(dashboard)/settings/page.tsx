@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Save, Building2, Users, Bell, Database, Mail, Loader2, FileText } from 'lucide-react'
+import { Save, Building2, Users, Bell, Database, Mail, Loader2, FileText, Calendar } from 'lucide-react'
 import { getSettings, updateSettings, type SettingsFormData } from '@/app/actions/settings'
 import { useToast } from '@/hooks/use-toast'
 import { useForm } from 'react-hook-form'
@@ -118,6 +118,57 @@ export default function SettingsPage() {
               <Label htmlFor="phone">Phone Number</Label>
               <Input id="phone" {...register('phone')} placeholder="020 1234 5678" />
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Financial Year */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              Financial Year
+            </CardTitle>
+            <CardDescription>
+              Set your financial year start date. Reports will use this for &quot;This Year&quot;, &quot;Last Year&quot;, and quarterly periods.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="financialYearStartMonth">Start Month</Label>
+                <select
+                  id="financialYearStartMonth"
+                  {...register('financialYearStartMonth')}
+                  className="flex h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+                >
+                  <option value={1}>January</option>
+                  <option value={2}>February</option>
+                  <option value={3}>March</option>
+                  <option value={4}>April</option>
+                  <option value={5}>May</option>
+                  <option value={6}>June</option>
+                  <option value={7}>July</option>
+                  <option value={8}>August</option>
+                  <option value={9}>September</option>
+                  <option value={10}>October</option>
+                  <option value={11}>November</option>
+                  <option value={12}>December</option>
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="financialYearStartDay">Start Day</Label>
+                <Input
+                  id="financialYearStartDay"
+                  type="number"
+                  min={1}
+                  max={31}
+                  {...register('financialYearStartDay')}
+                />
+              </div>
+            </div>
+            <p className="text-xs text-gray-500">
+              Example: April 1 for a UK tax year (6 April for personal tax)
+            </p>
           </CardContent>
         </Card>
 
