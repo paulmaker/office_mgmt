@@ -353,7 +353,7 @@ export default function JobsPage() {
                 <TableHead>Line Items</TableHead>
                 <SortableHeader column="status" label="Status" sortConfig={sortConfig} onSort={handleSort} />
                 <TableHead>Invoice Paid</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-right sticky right-0 bg-white z-10">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -381,11 +381,11 @@ export default function JobsPage() {
                       {formatDate(job.dateWorkCommenced)}
                     </TableCell>
                     <TableCell className="font-medium">{formatCurrency(job.price)}</TableCell>
-                    <TableCell>
+                    <TableCell className="max-w-[200px]">
                       {(job.employees && job.employees.length > 0) || (job.subcontractors && job.subcontractors.length > 0) ? (
                         <div className="flex items-center gap-1 text-sm">
-                          <Users className="h-3 w-3 text-gray-400" />
-                          <span>
+                          <Users className="h-3 w-3 text-gray-400 shrink-0" />
+                          <span className="truncate">
                             {[
                               ...job.employees.map(e => e.employee.name),
                               ...job.subcontractors.map(s => s.subcontractor.name)
@@ -422,7 +422,7 @@ export default function JobsPage() {
                         </div>
                       )}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right sticky right-0 bg-white">
                       <div className="flex justify-end gap-1">
                         <Button
                           variant="ghost"
