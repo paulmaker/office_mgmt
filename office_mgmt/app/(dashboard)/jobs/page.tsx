@@ -38,7 +38,7 @@ import { useToast } from '@/hooks/use-toast'
 import { SortableHeader } from '@/components/ui/sortable-header'
 import { DateRangeFilter } from '@/components/ui/date-range-filter'
 import { sortData, filterByDateRange, toggleSort, type SortConfig } from '@/lib/sort-utils'
-import { Plus, Search, Edit, Trash2, CheckCircle2, XCircle, Users, Mail } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, Users, Mail } from 'lucide-react'
 import type { Job } from '@prisma/client'
 
 type JobWithRelations = Job & {
@@ -352,20 +352,19 @@ export default function JobsPage() {
                 <TableHead>Workers</TableHead>
                 <TableHead>Line Items</TableHead>
                 <SortableHeader column="status" label="Status" sortConfig={sortConfig} onSort={handleSort} />
-                <TableHead>Invoice Paid</TableHead>
                 <TableHead className="text-right sticky right-0 bg-white z-10">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8">
+                  <TableCell colSpan={9} className="text-center py-8">
                     <p className="text-gray-500">Loading jobs...</p>
                   </TableCell>
                 </TableRow>
               ) : filteredJobs.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center py-8">
+                  <TableCell colSpan={9} className="text-center py-8">
                     <p className="text-gray-500">No jobs found</p>
                   </TableCell>
                 </TableRow>
@@ -376,7 +375,9 @@ export default function JobsPage() {
                     <TableCell>
                       {job.client.name}
                     </TableCell>
-                    <TableCell className="max-w-xs truncate">{job.jobDescription}</TableCell>
+                    <TableCell title={job.jobDescription}>
+                      {job.jobDescription.length > 10 ? `${job.jobDescription.slice(0, 10)}…` : job.jobDescription}
+                    </TableCell>
                     <TableCell className="text-gray-500">
                       {formatDate(job.dateWorkCommenced)}
                     </TableCell>
@@ -408,19 +409,6 @@ export default function JobsPage() {
                       >
                         {job.status.replace('_', ' ')}
                       </Badge>
-                    </TableCell>
-                    <TableCell>
-                      {job.invoicePaid ? (
-                        <div className="flex items-center gap-1 text-green-600">
-                          <CheckCircle2 className="h-4 w-4" />
-                          <span className="text-sm">Yes</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-1 text-gray-400">
-                          <XCircle className="h-4 w-4" />
-                          <span className="text-sm">No</span>
-                        </div>
-                      )}
                     </TableCell>
                     <TableCell className="text-right sticky right-0 bg-white">
                       <div className="flex justify-end gap-1">
