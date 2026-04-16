@@ -376,7 +376,7 @@ export default function JobsPage() {
                       {job.client.name}
                     </TableCell>
                     <TableCell title={job.jobDescription}>
-                      {job.jobDescription.length > 10 ? `${job.jobDescription.slice(0, 10)}…` : job.jobDescription}
+                      {job.jobDescription.length > 15 ? `${job.jobDescription.slice(0, 15)}…` : job.jobDescription}
                     </TableCell>
                     <TableCell className="text-gray-500">
                       {formatDate(job.dateWorkCommenced)}
