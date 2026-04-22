@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,16 +15,35 @@ import { useForm } from 'react-hook-form'
 import { Textarea } from '@/components/ui/textarea'
 import { LogoUpload } from '@/components/settings/logo-upload'
 
+const ADMIN_ROLES = ['PLATFORM_ADMIN', 'ACCOUNT_ADMIN', 'ENTITY_ADMIN']
+
 export default function SettingsPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const { toast } = useToast()
-  
+
   const { register, handleSubmit, reset } = useForm<SettingsFormData>()
 
+  const role = (session?.user as any)?.role
+  const isAuthorized = !!role && ADMIN_ROLES.includes(role)
+
   useEffect(() => {
+    if (status === 'loading') return
+
+    if (!session) {
+      router.push('/login')
+      return
+    }
+
+    if (!isAuthorized) {
+      router.push('/dashboard')
+      return
+    }
+
     loadSettings()
-  }, [])
+  }, [session, status, isAuthorized, router])
 
   const loadSettings = async () => {
     try {
@@ -59,6 +80,14 @@ export default function SettingsPage() {
     }
   }
 
+
+  if (status === 'loading' || !session || !isAuthorized) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    )
+  }
 
   if (loading) {
     return (
