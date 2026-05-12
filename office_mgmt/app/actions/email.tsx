@@ -110,11 +110,28 @@ export async function sendInvoiceEmail(invoiceId: string, sendCopy = true) {
       })
     }
 
-    if (invoice.type === 'SALES' && invoice.jobId && invoice.job?.status !== 'INVOICED') {
-      await prisma.job.update({
-        where: { id: invoice.jobId },
-        data: { status: 'INVOICED' },
-      })
+    if (invoice.type === 'SALES') {
+      const lineItemJobIds = Array.isArray(invoice.lineItems)
+        ? (invoice.lineItems as Array<{ jobId?: string }>)
+            .map(li => li?.jobId)
+            .filter((id): id is string => typeof id === 'string' && id.length > 0)
+        : []
+
+      const jobIds = Array.from(new Set([
+        ...(invoice.jobId ? [invoice.jobId] : []),
+        ...lineItemJobIds,
+      ]))
+
+      if (jobIds.length > 0) {
+        await prisma.job.updateMany({
+          where: {
+            id: { in: jobIds },
+            entityId: session.user.entityId,
+            status: { not: 'INVOICED' },
+          },
+          data: { status: 'INVOICED' },
+        })
+      }
     }
 
     return { success: true, messageId: lastId, sentTo: recipients.length }
