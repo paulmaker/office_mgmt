@@ -51,6 +51,11 @@ export async function getSettings() {
     throw new Error("Unauthorized")
   }
 
+  const userRole = (session.user as any)?.role
+  if (!['PLATFORM_ADMIN', 'ACCOUNT_ADMIN', 'ENTITY_ADMIN'].includes(userRole)) {
+    throw new Error("Only administrators can view settings")
+  }
+
   const entity = await prisma.entity.findUnique({
     where: { id: session.user.entityId },
     select: { settings: true, name: true }

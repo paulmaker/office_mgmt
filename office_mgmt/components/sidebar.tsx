@@ -42,7 +42,7 @@ const navigation = [
   { name: 'Assets', href: '/assets', icon: Truck, module: 'assets' as const },
   { name: 'Quick Links', href: '/quick-links', icon: Link2, module: 'quickLinks' as const },
   { name: 'Admin', href: '/admin', icon: Shield, adminOnly: true, module: null }, // Core module, always visible
-  { name: 'Settings', href: '/settings', icon: Settings, module: null }, // Core module, always visible
+  { name: 'Settings', href: '/settings', icon: Settings, adminOnly: true, module: null },
 ]
 
 export function Sidebar({ hasMultipleEntities = false }: { hasMultipleEntities?: boolean }) {

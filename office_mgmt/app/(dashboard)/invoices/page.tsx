@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import * as Tabs from '@radix-ui/react-tabs'
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import {
   Table,
   TableBody,
@@ -39,7 +40,7 @@ import { useToast } from '@/hooks/use-toast'
 import { SortableHeader } from '@/components/ui/sortable-header'
 import { DateRangeFilter } from '@/components/ui/date-range-filter'
 import { sortData, filterByDateRange, toggleSort, type SortConfig } from '@/lib/sort-utils'
-import { Plus, Search, Download, Eye, Mail, Edit, Trash2, Loader2, Paperclip } from 'lucide-react'
+import { Plus, Search, Download, Eye, Mail, Edit, Trash2, Loader2, Paperclip, MoreHorizontal } from 'lucide-react'
 import { openStoredFileUrl } from '@/lib/open-stored-file-url'
 import type { Invoice } from '@prisma/client'
 
@@ -419,7 +420,7 @@ export default function InvoicesPage() {
                   <span className="sr-only">Attachment</span>
                   <Paperclip className="inline h-4 w-4 text-muted-foreground" aria-hidden />
                 </TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead className="text-right sticky right-0 bg-white z-10">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -503,56 +504,75 @@ export default function InvoicesPage() {
                           <span className="text-gray-300">—</span>
                         )}
                       </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleEditClick(invoice)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        {invoice.status !== 'PAID' && (
+                    <TableCell className="text-right sticky right-0 bg-white">
+                      <DropdownMenu.Root>
+                        <DropdownMenu.Trigger asChild>
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDeleteClick(invoice)}
-                            disabled={deletingInvoiceId === invoice.id}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleViewPdf(invoice.id)}
-                          title="Preview PDF generated from this record"
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDownload(invoice.id)}
-                          title="Download generated PDF"
-                        >
-                          <Download className="h-4 w-4" />
-                        </Button>
-                        {invoice.type === 'SALES' && invoice.status !== 'PAID' && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleSendEmail(invoice)}
-                            disabled={sendingEmailId === invoice.id}
+                            className="h-8 w-8 p-0"
+                            aria-label="Row actions"
                           >
                             {sendingEmailId === invoice.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                              <Mail className="h-4 w-4" />
+                              <MoreHorizontal className="h-4 w-4" />
                             )}
                           </Button>
-                        )}
-                      </div>
+                        </DropdownMenu.Trigger>
+                        <DropdownMenu.Portal>
+                          <DropdownMenu.Content
+                            align="end"
+                            sideOffset={4}
+                            className="z-50 min-w-[10rem] rounded-md border bg-white p-1 shadow-md"
+                          >
+                            <DropdownMenu.Item
+                              onSelect={() => handleEditClick(invoice)}
+                              className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm cursor-pointer outline-none focus:bg-gray-100 data-[disabled]:opacity-50 data-[disabled]:pointer-events-none"
+                            >
+                              <Edit className="h-4 w-4" />
+                              Edit
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Item
+                              onSelect={() => handleViewPdf(invoice.id)}
+                              className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm cursor-pointer outline-none focus:bg-gray-100 data-[disabled]:opacity-50 data-[disabled]:pointer-events-none"
+                            >
+                              <Eye className="h-4 w-4" />
+                              Preview PDF
+                            </DropdownMenu.Item>
+                            <DropdownMenu.Item
+                              onSelect={() => handleDownload(invoice.id)}
+                              className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm cursor-pointer outline-none focus:bg-gray-100 data-[disabled]:opacity-50 data-[disabled]:pointer-events-none"
+                            >
+                              <Download className="h-4 w-4" />
+                              Download PDF
+                            </DropdownMenu.Item>
+                            {invoice.type === 'SALES' && invoice.status !== 'PAID' && (
+                              <DropdownMenu.Item
+                                onSelect={() => handleSendEmail(invoice)}
+                                disabled={sendingEmailId === invoice.id}
+                                className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm cursor-pointer outline-none focus:bg-gray-100 data-[disabled]:opacity-50 data-[disabled]:pointer-events-none"
+                              >
+                                <Mail className="h-4 w-4" />
+                                Send Email
+                              </DropdownMenu.Item>
+                            )}
+                            {invoice.status !== 'PAID' && (
+                              <>
+                                <DropdownMenu.Separator className="my-1 h-px bg-gray-200" />
+                                <DropdownMenu.Item
+                                  onSelect={() => handleDeleteClick(invoice)}
+                                  disabled={deletingInvoiceId === invoice.id}
+                                  className="flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm cursor-pointer outline-none text-red-600 focus:bg-red-50 data-[disabled]:opacity-50 data-[disabled]:pointer-events-none"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  Delete
+                                </DropdownMenu.Item>
+                              </>
+                            )}
+                          </DropdownMenu.Content>
+                        </DropdownMenu.Portal>
+                      </DropdownMenu.Root>
                     </TableCell>
                   </TableRow>
                   )
