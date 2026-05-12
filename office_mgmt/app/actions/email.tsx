@@ -110,6 +110,13 @@ export async function sendInvoiceEmail(invoiceId: string, sendCopy = true) {
       })
     }
 
+    if (invoice.type === 'SALES' && invoice.jobId && invoice.job?.status !== 'INVOICED') {
+      await prisma.job.update({
+        where: { id: invoice.jobId },
+        data: { status: 'INVOICED' },
+      })
+    }
+
     return { success: true, messageId: lastId, sentTo: recipients.length }
   } catch (error) {
     console.error("Send Invoice Error:", error)

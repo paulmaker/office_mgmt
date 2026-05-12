@@ -544,6 +544,7 @@ export function InvoiceForm({ invoice, onSuccess, onCancel }: InvoiceFormProps) 
             <option value="">No job linked</option>
             {allJobs
               .filter(job => !selectedClientId || job.clientId === selectedClientId)
+              .filter(job => job.status !== 'INVOICED' || job.id === invoice?.jobId)
               .map((job) => (
                 <option key={job.id} value={job.id}>
                   {job.jobNumber} - {job.jobDescription}

@@ -321,6 +321,7 @@ export function JobForm({ job, onSuccess, onCancel }: JobFormProps) {
             <option value="IN_PROGRESS">In Progress</option>
             <option value="COMPLETE">Complete</option>
             <option value="READY_TO_INVOICE">Ready to Invoice</option>
+            <option value="INVOICED">Invoiced</option>
           </select>
         </div>
       </div>

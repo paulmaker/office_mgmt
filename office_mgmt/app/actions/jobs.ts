@@ -459,6 +459,7 @@ export async function getJobsByClient(clientId: string) {
       clientId: clientId,
       invoicePaid: false,
       invoiceId: null,
+      status: { not: 'INVOICED' },
     },
     include: {
       lineItems: true,
